@@ -3,48 +3,64 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// ESM __dirname
+// ================== ESM __dirname ==================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ================== CONFIGURATION PAR DÉFAUT ==================
 const defaultConfig = {
-  SESSION_ID: "kaya~qUNVERQD#7oBuPDx7dhKCQjqBpkkwhjAGxbYyo2aE3R1DO3FWi84",
-  OWNER_NUMBER: "243993621718",
+  // 🔑 Identifiants
+  SESSION_ID: "kaya~6EMj3CDK#GrRuioaQpGp8JntXWXgZter_wW5_2pPoYNGvxygFbrs",
+  OWNER_NUMBER: "243833173093",
   PREFIX: ".",
   TIMEZONE: "Africa/Kinshasa",
-  publicBot: true, // true = public, false = privé par défaut
-  autoRead: true,
-  restrict: false,
-  botImage: "",
+  VERSION: "2.0.0",
+
+  // 🤖 Paramètres du bot
+  public: true,       // mode standard Baileys
+  autoRead: true,     // lire automatiquement les messages
+  restrict: false,    // restreindre certaines fonctionnalités
+  botImage: "",       // image du bot
+  blockInbox: false,  // bloquer les messages privés si true
+
+  // 🌐 Liens utiles
   LINKS: {
     group: "https://chat.whatsapp.com/DoMh6jWjly2ErwVppmCGZo",
-    chanel: "https://whatsapp.com/channel/0029Vb6FFPM002T3SKA6bb2D",
+    channel: "https://whatsapp.com/channel/0029Vb6FFPM002T3SKA6bb2D",
     telegram: "https://t.me/zonetech2"
   }
 };
 
-// Crée le dossier data si inexistant
+// ================== CHEMINS DES DONNÉES ==================
 const dataDir = path.join(__dirname, "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-// Chemin vers config.json
 const configPath = path.join(dataDir, "config.json");
 
-// Crée config.json si inexistant
+// ================== CRÉATION DU FICHIER SI INEXISTANT ==================
 if (!fs.existsSync(configPath)) {
   fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
-  console.log("✅ config.json créé avec les paramètres par défaut dans /data");
+  console.log("✅ config.json créé avec les paramètres par défaut");
 }
 
-// Charge config.json
+// ================== CHARGEMENT DE LA CONFIG ==================
 let userConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
-// Fonction pour sauvegarder après modification
+// ================== VARIABLES GLOBALES ==================
+global.blockInbox = userConfig.blockInbox ?? false;
+
+// ================== FONCTION DE SAUVEGARDE ==================
 export function saveConfig(updatedConfig) {
   userConfig = { ...userConfig, ...updatedConfig };
   fs.writeFileSync(configPath, JSON.stringify(userConfig, null, 2));
-  console.log("✅ Configuration sauvegardée avec succès.");
+
+  // Mise à jour des variables globales si nécessaire
+  if (typeof updatedConfig.blockInbox !== "undefined") {
+    global.blockInbox = updatedConfig.blockInbox;
+  }
+
+  console.log("✅ Configuration sauvegardée");
 }
 
-// Export de la config complète
+// ================== EXPORT ==================
 export default userConfig;
