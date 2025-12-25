@@ -9,11 +9,11 @@ export default {
   run: async (kaya, m, msg, store, args) => {
     try {
       const argsArray = Array.isArray(args) ? args : [];
-      const input = argsArray[0]?.toLowerCase();
+      const langCode = argsArray[0]?.toLowerCase();
       const quotedText = m.quoted?.text;
 
       // 📘 HELP
-      if (!input || input === 'help') {
+      if (!langCode || langCode === 'help') {
         return kaya.sendMessage(
           m.chat,
           {
@@ -43,23 +43,25 @@ pt 🇵🇹 | ar 🇸🇦  | sw 🇨🇩
         );
       }
 
+      // Vérifie que l’utilisateur a répondu à un message
       if (!quotedText) {
         return kaya.sendMessage(
           m.chat,
           {
-            text: `❌ Réponds à un message pour le traduire.\nℹ️ Tape *.traduc help* pour l’aide.`,
+            text: `❌ Réponds à un message pour le traduire.\nℹ️ Exemple : *.traduc ${langCode}*`,
             contextInfo
           },
           { quoted: m }
         );
       }
 
-      const res = await translate(quotedText, { to: input });
+      // Traduction
+      const res = await translate(quotedText, { to: langCode });
 
       await kaya.sendMessage(
         m.chat,
         {
-          text: `🌍 *Traduction (${input.toUpperCase()})*\n\n${res.text}`,
+          text: `🌍 *Traduction (${langCode.toUpperCase()})*\n\n${res.text}`,
           contextInfo
         },
         { quoted: m }

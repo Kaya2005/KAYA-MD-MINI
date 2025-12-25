@@ -7,7 +7,7 @@ export default {
 
   run: async (kaya, m) => {
 
-    // 🔐 Owner uniquement (comme prefix.js)
+    /
     if (!m.fromMe) return;
 
     try {

@@ -83,9 +83,6 @@ export default {
 │ 📤 *Lien généré avecsuccès!*
 │ 🔗 *Lien Catbox :*
 │ ${url}
-│
-│ 📋 *Copie rapide :*
-│ \`\`\`${url}\`\`\`
 ╰──────────────────⬣`.trim();
 
             // Envoyer le résultat UNE SEULE FOIS

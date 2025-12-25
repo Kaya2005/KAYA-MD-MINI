@@ -14,7 +14,7 @@ export default {
       const seconds = Math.floor(uptime % 60);
 
       const message = `╭─「 𝗞𝗔𝗬𝗔-𝗠𝗗 」─⬣
-│ ✅ *J'suis 𝗞𝗔𝗬𝗔-𝗠𝗗*
+│  *J'suis 𝗞𝗔𝗬𝗔-𝗠𝗗*
 │ ⏱️ *Uptime :* ${hours}h ${minutes}m ${seconds}s
 ╰───────────────⬣`;
 

@@ -48,7 +48,7 @@ export default {
       // ✅ Confirmation
       await Kaya.sendMessage(
         m.chat,
-        { text: `✅ @${number} a été ajouté au groupe.`, mentions: [jid], contextInfo },
+        { text: ` @${number} a été ajouté au groupe.`, mentions: [jid], contextInfo },
         { quoted: m }
       );
 

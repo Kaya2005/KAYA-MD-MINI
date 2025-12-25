@@ -1,4 +1,7 @@
+import fs from 'fs';
+import path from 'path';
 import { contextInfo } from '../system/contextInfo.js';
+import { BOT_NAME, BOT_SLOGAN, getBotImage } from '../system/botAssets.js';
 
 export default {
   name: 'menu',
@@ -10,10 +13,20 @@ export default {
       minute: '2-digit',
     });
 
-    const totalCmds = 43; // à rendre dynamique si nécessaire
+    // ===================== COMPTE DYNAMIQUE DES COMMANDES =====================
+    const commandsDir = path.join(process.cwd(), 'commands');
+    let totalCmds = 0;
+    try {
+      const files = fs.readdirSync(commandsDir);
+      totalCmds = files.filter(f => f.endsWith('.js')).length;
+    } catch (err) {
+      console.error('❌ Impossible de lire le dossier commands :', err);
+      totalCmds = 0;
+    }
 
+    // ===================== TEXTE DU MENU =====================
     const menuText = `
-    𓊈 *𝐊𝐀𝐘𝐀-𝐌𝐈𝐍𝐈 𝐁𝐎𝐓* 𓊉
+         ${BOT_NAME}
 ┏━━━━━━━━━━━━━━━━━━━
 ┃ 🕒 *Heure* : ${time}
 ┃ 🧾 *Cmds*  : ${totalCmds}
@@ -30,6 +43,7 @@ export default {
 ┃ ◈ .antilink on/off
 ┃ ◈ .antispam on/off
 ┃ ◈ .antitag on/off
+┃ ◈ .antidelete on/off
 ┃ ◈ .groupinfo
 ┃ ◈ .promote
 ┃ ◈ .revoque
@@ -49,6 +63,8 @@ export default {
 ┃ ◈ .unban
 ┃ ◈ .sudo
 ┃ ◈ .unsudo
+┃ ◈ .update
+┃ ◈ .setbotimage 
 ┃ ◈ .prefix
 ┃ ◈ .allprefix
 ┃ ◈ .typing
@@ -70,6 +86,7 @@ export default {
 ┃ ◈ .sticker
 ┃ ◈ .take
 ┃ ◈ .photo
+┃ ◈ .remini ( améliore photo)
 ┃ ◈ .tg ( sticker telegram)
 ┃ ◈ .emojimix 😃+🤪
 ┗━━━━━━━━━━━━━━━━━━━
@@ -82,6 +99,7 @@ export default {
 ┃ ◈ .video
 ┃ ◈ .fb
 ┃ ◈ .insta
+┃ ◈ .img
 ┗━━━━━━━━━━━━━━━━━━━
 
 『 *\`DIVERS\`* 』
@@ -90,17 +108,18 @@ export default {
 ┃ ◈ .help
 ┗━━━━━━━━━━━━━━━━━━━
 
-*➤ Ne cours pas après l’argent, construis ce qui l’attire*
+*${BOT_SLOGAN}*
 `;
+
+    // ===================== ENVOI DU MENU =====================
     try {
       await Kaya.sendMessage(
         m.key.remoteJid,
         {
-          image: { url: 'https://files.catbox.moe/981fr6.jpg' },
+          image: { url: getBotImage() }, 
           caption: menuText,
           contextInfo,
-        },
-        { quoted: m }
+        }
       );
     } catch (err) {
       console.error('❌ Impossible d’envoyer le menu :', err);
