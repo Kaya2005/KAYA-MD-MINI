@@ -10,14 +10,14 @@ const __dirname = path.dirname(__filename);
 // ================== CONFIGURATION PAR DÉFAUT ==================
 const defaultConfig = {
   // 🔑 Identifiants
-  SESSION_ID: "kaya~6EMj3CDK#GrRuioaQpGp8JntXWXgZter_wW5_2pPoYNGvxygFbrs",
-  OWNER_NUMBER: "243833173093",
+  SESSION_ID: "met ta session",
+  OWNER_NUMBER: "met ton numéro",
   PREFIX: ".",
   TIMEZONE: "Africa/Kinshasa",
   VERSION: "2.0.0",
 
   // 🤖 Paramètres du bot
-  public: true,       // mode standard Baileys
+  public: true,       
   autoRead: true,     // lire automatiquement les messages
   restrict: false,    // restreindre certaines fonctionnalités
   botImage: "",       // image du bot
