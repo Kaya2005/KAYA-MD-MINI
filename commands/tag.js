@@ -1,61 +1,69 @@
-// ==================== commands/tag.js ====================
 import checkAdminOrOwner from '../system/checkAdmin.js';
-import { contextInfo } from '../system/contextInfo.js';
 
 export default {
   name: 'tag',
-  description: 'Mentionne tous les membres avec un message',
+  description: 'Mentionne tous les membres avec le texte écrit ou cité',
   category: 'Groupe',
   group: true,
   admin: true,
 
-  run: async (kaya, m, msg, store, args) => {
+  run: async (kaya, m, args) => {
     try {
-      if (!m.isGroup) {
+      if (!m.key.remoteJid.endsWith('@g.us')) {
         return kaya.sendMessage(
           m.chat,
-          { text: '❌ Cette commande fonctionne uniquement dans un groupe.', contextInfo },
+          { text: 'Cette commande fonctionne uniquement dans un groupe.' },
           { quoted: m }
         );
       }
 
-      const metadata = await kaya.groupMetadata(m.chat).catch(() => null);
-      if (!metadata) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Impossible de récupérer les informations du groupe.', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      // Vérifie si l’utilisateur est admin ou owner
       const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
-      if (!permissions.isAdmin && !permissions.isOwner) {
+      if (!permissions.isAdminOrOwner) {
         return kaya.sendMessage(
           m.chat,
-          { text: '🚫 Accès refusé : Seuls les admins ou owners peuvent utiliser cette commande.', contextInfo },
+          { text: '⛔ Commande réservée aux admins et au owner.' },
           { quoted: m }
         );
       }
 
-      const members = metadata.participants.map(p => p.id);
-      const message = m.quoted?.text || args.join(' ') || '_Aucun message fourni._';
+      // 🔥 RÉCUPÉRATION DU TEXTE CITÉ (BAILEYS v7)
+      let quotedText = '';
+      const ctx = m.message?.extendedTextMessage?.contextInfo;
 
-      // ✅ Envoi du message tagué SANS contextInfo
+      if (ctx?.quotedMessage) {
+        const qm = ctx.quotedMessage;
+        quotedText =
+          qm.conversation ||
+          qm.extendedTextMessage?.text ||
+          qm.imageMessage?.caption ||
+          qm.videoMessage?.caption ||
+          '';
+      }
+
+      const metadata = await kaya.groupMetadata(m.chat);
+      const members = metadata.participants
+        .map(p => p.id || p.jid)
+        .filter(Boolean);
+
+      const text =
+        quotedText ||
+        args.join(' ') ||
+        '📢 Mention générale';
+
       await kaya.sendMessage(
         m.chat,
         {
-          text: message,
+          text,
           mentions: members
         },
-        { quoted: m } // citation facultative
+        { quoted: m }
       );
 
     } catch (err) {
       console.error('Erreur commande tag :', err);
       await kaya.sendMessage(
         m.chat,
-        { text: '❌ Une erreur est survenue lors de l’envoi du tag.', contextInfo },
+        { text: '❌ Erreur lors de l’envoi du tag.' },
         { quoted: m }
       );
     }

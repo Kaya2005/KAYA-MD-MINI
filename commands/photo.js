@@ -1,83 +1,91 @@
-// ==================== commands/photo.js ====================
-import fs from 'fs';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
+import sharp from 'sharp';
+import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import sharp from 'sharp';
-import { downloadMediaMessage, downloadContentFromMessage } from '@rexxhayanasi/elaina-bail';
-import { contextInfo } from '../system/contextInfo.js';
 
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
+export default {
+    name: 'photo',
+    alias: ['p', 'image', 'topng'],
+    description: 'Convertir un sticker en photo PNG',
+    category: 'media',
+    usage: '<répondre à un sticker>',
+    async execute(sock, m, args) {
+        try {
+            // Récupérer le message cité
+            const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const isQuotedSticker = quoted?.stickerMessage;
+            const isSticker = m.message?.stickerMessage;
+            
+            if (!isQuotedSticker && !isSticker) {
+                return sock.sendMessage(m.chat, {
+                    text: '⚠️ *Usage:* Réponds à un sticker avec `.photo`\n\n*Exemples:*\n• .photo (en réponse à un sticker)\n• .p (alias)'
+                }, { quoted: m });
+            }
 
-export const name = 'photo';
-export const description = 'Convertit un sticker en image PNG';
-export const category = 'Stickers';
+            // Indiquer que le bot traite le sticker
+            await sock.sendPresenceUpdate('composing', m.chat);
 
-export async function run(kaya, m, msg, store, args) {
-  try {
-    const target = m.quoted ? m.quoted : m;
+            // Fonction pour convertir stream en Buffer
+            const streamToBuffer = async (stream) => {
+                const chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                return Buffer.concat(chunks);
+            };
 
-    if (!target.mtype || target.mtype !== 'stickerMessage') {
-      return kaya.sendMessage(
-        m.chat,
-        { text: '❌ Réponds à un sticker avec `.photo`', contextInfo },
-        { quoted: m }
-      );
+            // Télécharger le sticker
+            let buffer;
+            
+            if (isQuotedSticker) {
+                const stream = await downloadContentFromMessage(quoted.stickerMessage, 'sticker');
+                buffer = await streamToBuffer(stream);
+            } else {
+                const stream = await downloadContentFromMessage(m.message.stickerMessage, 'sticker');
+                buffer = await streamToBuffer(stream);
+            }
+
+            // Vérifier le buffer
+            if (!buffer || buffer.length < 100) {
+                return sock.sendMessage(m.chat, {
+                    text: '❌ Impossible de lire ce sticker (fichier trop petit ou corrompu)'
+                }, { quoted: m });
+            }
+
+            // Convertir WebP en PNG avec Sharp
+            const pngBuffer = await sharp(buffer)
+                .png()
+                .toBuffer();
+
+            // Chemin temporaire pour le fichier (optionnel, pour debug)
+            const tempPath = path.join(os.tmpdir(), `sticker_${Date.now()}.png`);
+            await fs.writeFile(tempPath, pngBuffer);
+
+            // Envoyer l'image
+            await sock.sendMessage(m.chat, {
+                image: pngBuffer,
+                caption: '✅ Sticker converti en image PNG',
+                mimetype: 'image/png'
+            }, { quoted: m });
+
+            // Nettoyer le fichier temporaire
+            await fs.unlink(tempPath);
+
+        } catch (error) {
+            console.error('❌ Erreur commande photo:', error);
+            
+            let errorMessage = '❌ Une erreur est survenue lors de la conversion.';
+            
+            if (error.message.includes('unsupported image format')) {
+                errorMessage = '❌ Format d\'image non supporté. Assure-toi que c\'est un sticker WebP valide.';
+            } else if (error.message.includes('input buffer contains unsupported image format')) {
+                errorMessage = '❌ Le sticker semble corrompu ou dans un format non supporté.';
+            }
+            
+            sock.sendMessage(m.chat, {
+                text: errorMessage
+            }, { quoted: m });
+        }
     }
-
-    let buffer;
-
-    // Cas spécial Elaina Bail : message a déjà une méthode download()
-    if (typeof target.download === 'function') {
-      buffer = await target.download();
-    }
-
-    // Sinon fallback sur downloadMediaMessage
-    if (!buffer) {
-      try {
-        buffer = await downloadMediaMessage(target.msg || target.message[target.mtype], 'sticker', { logger: kaya.logger });
-      } catch (err1) {
-        // Fallback classique avec downloadContentFromMessage
-        const node = target.msg || target.message?.[target.mtype];
-        if (!node) throw new Error('Sticker introuvable pour téléchargement');
-
-        const stream = await downloadContentFromMessage(node, 'sticker');
-        buffer = await streamToBuffer(stream);
-      }
-    }
-
-    if (!buffer || buffer.length < 100) {
-      return kaya.sendMessage(
-        m.chat,
-        { text: '❌ Impossible de lire ce sticker.', contextInfo },
-        { quoted: m }
-      );
-    }
-
-    const outputPath = path.join(os.tmpdir(), `sticker_${Date.now()}.png`);
-    await sharp(buffer).png().toFile(outputPath);
-
-    await kaya.sendMessage(
-      m.chat,
-      {
-        image: fs.readFileSync(outputPath),
-        caption: '✅ Sticker converti en image PNG',
-        contextInfo
-      },
-      { quoted: m }
-    );
-
-    fs.unlinkSync(outputPath);
-
-  } catch (err) {
-    console.error('Sticker to photo error:', err);
-    return kaya.sendMessage(
-      m.chat,
-      { text: '❌ Une erreur est survenue lors de la conversion.', contextInfo },
-      { quoted: m }
-    );
-  }
-}
+};

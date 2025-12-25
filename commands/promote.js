@@ -1,10 +1,8 @@
-// ================= commands/promote.js =================
-import checkAdminOrOwner from "../system/checkAdmin.js";
-import { contextInfo } from '../system/contextInfo.js';
+import checkAdminOrOwner from '../system/checkAdmin.js';
 
 export default {
   name: 'promote',
-  description: '👑 Promouvoir un membre du groupe en admin',
+  description: '👑 Promouvoir un membre du groupe (silencieux)',
   category: 'Groupe',
   group: true,
   admin: true,
@@ -12,64 +10,41 @@ export default {
 
   run: async (kaya, m, msg, store, args) => {
     try {
-      if (!m.isGroup) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Cette commande ne fonctionne que dans un groupe.', contextInfo },
-          { quoted: m }
-        );
-      }
+      if (!m.isGroup) return;
 
+      // 🔹 Vérification admin / owner
       const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
-      const isAdminOrOwner = permissions.isAdmin || permissions.isOwner;
+      if (!permissions.isAdminOrOwner) return;
 
-      if (!isAdminOrOwner) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '🚫 Seuls les admins ou le propriétaire peuvent utiliser cette commande.', contextInfo },
-          { quoted: m }
-        );
-      }
+      // ==================== CIBLE ====================
+      let target = null;
 
-      let target;
-      // Vérifie si un membre est mentionné
-      if (m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+      // 1️⃣ Mention
+      if (m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
         target = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
-      } 
-      // Vérifie si on répond à un message
-      else if (m.quoted?.sender) {
-        target = m.quoted.sender;
-      } 
-      // Vérifie si un numéro est donné en argument
-      else if (args.length) {
-        target = args[0].includes('@') ? args[0] : `${args[0]}@s.whatsapp.net`;
-      } 
-      // Sinon erreur
-      else {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Mentionne la personne, réponds à son message ou donne son numéro.', contextInfo },
-          { quoted: m }
-        );
       }
 
-      // Exécuter la promotion
+      // 2️⃣ Réponse à un message
+      else if (m.message?.extendedTextMessage?.contextInfo?.participant) {
+        target = m.message.extendedTextMessage.contextInfo.participant;
+      }
+
+      // 3️⃣ Numéro écrit
+      else if (args[0]) {
+        target = args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+      }
+
+      if (!target) return;
+
+      // ==================== PROMOTION SILENCIEUSE ====================
       await kaya.groupParticipantsUpdate(m.chat, [target], 'promote');
 
-      // Confirmation
-      return kaya.sendMessage(
-        m.chat,
-        { text: `✅ @${target.split('@')[0]} est maintenant admin !`, mentions: [target], contextInfo },
-        { quoted: m }
-      );
+      // ❌ Aucun message envoyé
+      return;
 
     } catch (err) {
-      console.error('❌ Erreur promote :', err);
-      return kaya.sendMessage(
-        m.chat,
-        { text: `❌ Impossible de promouvoir ce membre.\nDétails : ${err.message}`, contextInfo },
-        { quoted: m }
-      );
+      console.error('❌ Erreur promote:', err);
+      return;
     }
   }
 };

@@ -1,79 +1,125 @@
-// ==================== commands/take.js ====================
-import { downloadMediaMessage, downloadContentFromMessage } from '@rexxhayanasi/elaina-bail';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { Sticker, StickerTypes } from 'wa-sticker-formatter';
-import { contextInfo } from '../system/contextInfo.js';
-
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
+import { addExif } from '../lib/sticker.js';
 
 export default {
-  name: 'take',
-  description: 'Reprend un sticker/image/vidéo et met l’auteur = pseudo de la personne',
-  category: 'Stickers',
-
-  run: async (kaya, m, msg, store, args) => {
-    try {
-      const authorName = m.pushName || "User";
-
-      const target = m.quoted ? m.quoted : m;
-
-      if (!target.mtype || !['stickerMessage', 'imageMessage', 'videoMessage'].includes(target.mtype)) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Réponds à un sticker/image/vidéo valide.', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      let buffer;
-
-      
-      if (typeof target.download === 'function') {
-        buffer = await target.download();
-      }
-
-      // Sinon fallback sur downloadMediaMessage
-      if (!buffer) {
+    name: 'take',
+    alias: ['steal', 'reprendre', 'vol'],
+    description: 'Reprend un média avec seulement le pseudo comme auteur (pas de pack)',
+    category: 'media',
+    usage: '<répondre à un sticker/image/vidéo> [texte optionnel]',
+    async execute(sock, m, args) {
         try {
-          buffer = await downloadMediaMessage(target, 'buffer', undefined, { logger: kaya.logger });
-        } catch (err1) {
-          // Fallback classique avec downloadContentFromMessage
-          const node = target.message?.[target.mtype] || target.msg;
-          if (!node) throw new Error('Message média introuvable (aucun node)');
+            // Récupérer le pseudo de l'utilisateur
+            const pushName = m.pushName || m.sender.split('@')[0] || "User";
+            
+            // Combiner pseudo + texte optionnel des arguments
+            let authorName = pushName;
+            if (args.length > 0) {
+                authorName += ` ${args.join(' ')}`;
+            }
 
-          const kind = target.mtype === 'stickerMessage' ? 'sticker' : target.mtype === 'imageMessage' ? 'image' : 'video';
-          const stream = await downloadContentFromMessage(node, kind);
-          buffer = await streamToBuffer(stream);
+            // Vérifier le message cité ou le message courant
+            const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const isQuoted = quoted && (quoted.stickerMessage || quoted.imageMessage || quoted.videoMessage);
+            const isCurrent = m.message && (m.message.stickerMessage || m.message.imageMessage || m.message.videoMessage);
+            
+            if (!isQuoted && !isCurrent) {
+                return sock.sendMessage(m.chat, {
+                    text: '⚠️ *Usage:* Réponds à un sticker/image/vidéo\n\n*Exemples:*\n• .take (en réponse)\n• .take dom (ajoute "dom")\n• .take (média envoyé)'
+                }, { quoted: m });
+            }
+
+            await sock.sendPresenceUpdate('composing', m.chat);
+
+            // Fonction pour convertir stream en Buffer
+            const streamToBuffer = async (stream) => {
+                const chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                return Buffer.concat(chunks);
+            };
+
+            // Télécharger le média
+            let buffer;
+            
+            if (isQuoted) {
+                if (quoted.stickerMessage) {
+                    const stream = await downloadContentFromMessage(quoted.stickerMessage, 'sticker');
+                    buffer = await streamToBuffer(stream);
+                } else if (quoted.imageMessage) {
+                    const stream = await downloadContentFromMessage(quoted.imageMessage, 'image');
+                    buffer = await streamToBuffer(stream);
+                } else if (quoted.videoMessage) {
+                    const stream = await downloadContentFromMessage(quoted.videoMessage, 'video');
+                    buffer = await streamToBuffer(stream);
+                }
+            } else {
+                if (m.message.stickerMessage) {
+                    const stream = await downloadContentFromMessage(m.message.stickerMessage, 'sticker');
+                    buffer = await streamToBuffer(stream);
+                } else if (m.message.imageMessage) {
+                    const stream = await downloadContentFromMessage(m.message.imageMessage, 'image');
+                    buffer = await streamToBuffer(stream);
+                } else if (m.message.videoMessage) {
+                    const stream = await downloadContentFromMessage(m.message.videoMessage, 'video');
+                    buffer = await streamToBuffer(stream);
+                }
+            }
+
+            if (!buffer || buffer.length < 100) {
+                return sock.sendMessage(m.chat, {
+                    text: '❌ Impossible de lire ce média'
+                }, { quoted: m });
+            }
+
+            // Options du sticker - SEULEMENT l'auteur, PAS de pack
+            const stickerOptions = {
+                packname: '', // CHANGÉ : chaine vide pour supprimer le pack
+                author: authorName, // Seulement le pseudo (+ texte optionnel)
+                categories: ['🎨'], // Optionnel
+                quality: 70,
+                type: StickerTypes.FULL
+            };
+
+            // Créer le sticker
+            let stickerBuffer;
+            
+            if (typeof addExif === 'function') {
+                stickerBuffer = await addExif(buffer, stickerOptions);
+            } else {
+                const sticker = new Sticker(buffer, {
+                    pack: '', // CHANGÉ : chaine vide
+                    author: authorName, // Seulement l'auteur
+                    type: StickerTypes.FULL,
+                    categories: ['🎨'],
+                    quality: 70,
+                    background: 'transparent'
+                });
+                stickerBuffer = await sticker.toBuffer();
+            }
+
+            // Envoyer UNIQUEMENT le sticker
+            await sock.sendMessage(m.chat, {
+                sticker: stickerBuffer,
+                mimetype: 'image/webp'
+            }, { quoted: m });
+
+        } catch (error) {
+            console.error('❌ Erreur commande take:', error);
+            
+            let errorMessage = '❌ Erreur lors de la création du sticker.';
+            
+            if (error.message.includes('unsupported image')) {
+                errorMessage = '❌ Format de média non supporté.';
+            } else if (error.message.includes('corrupt')) {
+                errorMessage = '❌ Le média semble corrompu.';
+            }
+            
+            sock.sendMessage(m.chat, {
+                text: errorMessage
+            }, { quoted: m });
         }
-      }
-
-      if (!buffer || buffer.length < 100) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Impossible de lire ce média.', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      const sticker = new Sticker(buffer, {
-        author: authorName,
-        type: StickerTypes.FULL,
-        quality: 70
-      });
-
-      const webp = await sticker.build();
-      await kaya.sendMessage(m.chat, { sticker: webp }, { quoted: m });
-
-    } catch (err) {
-      console.error("Take error:", err);
-      return kaya.sendMessage(
-        m.chat,
-        { text: "❌ Erreur lors de la création du sticker.", contextInfo },
-        { quoted: m }
-      );
     }
-  }
 };

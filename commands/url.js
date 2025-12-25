@@ -1,91 +1,114 @@
-// ==================== commands/url.js ====================
 import axios from 'axios';
 import FormData from 'form-data';
-import { downloadMediaMessage, downloadContentFromMessage } from '@rexxhayanasi/elaina-bail';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { Readable } from 'stream';
-import { contextInfo } from '../system/contextInfo.js';
-
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
 
 export default {
-  name: 'url',
-  description: '🔗 Génère un lien Catbox à partir d’une image',
-  run: async (kaya, m) => {
-    try {
-      const target = m.quoted ? m.quoted : m;
-      const mime = target?.mimetype || target?.msg?.mimetype || '';
-
-      if (!/image\/(jpe?g|png)/.test(mime)) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '📸 *Veuillez répondre à une image pour générer un lien.*', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      let buffer;
-
-      // Tentative avec target.download() si disponible
-      if (typeof target.download === 'function') {
-        buffer = await target.download();
-      }
-
-      // Sinon fallback sur downloadMediaMessage
-      if (!buffer) {
+    name: 'url',
+    alias: ['catbox', 'upload', 'lien'],
+    description: '🔗 Génère un lien Catbox à partir d\'une image',
+    category: 'media',
+    usage: '<répondre à une image>',
+    async execute(sock, m, args) {
         try {
-          buffer = await downloadMediaMessage(target.msg || target.message[target.mtype], 'image', { logger: kaya.logger });
-        } catch (err1) {
-          // Fallback classique avec downloadContentFromMessage
-          const node = target.msg || target.message?.[target.mtype];
-          if (!node) throw new Error('Image introuvable pour téléchargement');
+            // Vérifier le message cité
+            const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const isQuotedImage = quoted?.imageMessage;
+            const isImage = m.message?.imageMessage;
+            
+            if (!isQuotedImage && !isImage) {
+                return sock.sendMessage(m.chat, {
+                    text: '📸 *Usage:* Réponds à une image pour générer un lien Catbox\n\n*Exemples:*\n• .url (en réponse à une image)\n• .catbox (alias)'
+                }, { quoted: m });
+            }
 
-          const stream = await downloadContentFromMessage(node, 'image');
-          buffer = await streamToBuffer(stream);
-        }
-      }
+            // Indiquer que le bot traite l'image
+            await sock.sendPresenceUpdate('composing', m.chat);
 
-      if (!buffer || buffer.length < 100) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Impossible de lire cette image.', contextInfo },
-          { quoted: m }
-        );
-      }
+            // Fonction pour convertir stream en Buffer
+            const streamToBuffer = async (stream) => {
+                const chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                return Buffer.concat(chunks);
+            };
 
-      const form = new FormData();
-      form.append('reqtype', 'fileupload');
-      form.append('fileToUpload', Readable.from(buffer), 'image.jpg');
+            // Télécharger l'image
+            let buffer;
+            let imageMessage;
+            
+            if (isQuotedImage) {
+                imageMessage = quoted.imageMessage;
+                const stream = await downloadContentFromMessage(imageMessage, 'image');
+                buffer = await streamToBuffer(stream);
+            } else {
+                imageMessage = m.message.imageMessage;
+                const stream = await downloadContentFromMessage(imageMessage, 'image');
+                buffer = await streamToBuffer(stream);
+            }
 
-      const response = await axios.post('https://catbox.moe/user/api.php', form, {
-        headers: form.getHeaders()
-      });
+            // Vérifier le buffer
+            if (!buffer || buffer.length < 100) {
+                return sock.sendMessage(m.chat, {
+                    text: '❌ Impossible de lire cette image (fichier trop petit ou corrompu)'
+                }, { quoted: m });
+            }
 
-      const url = response.data;
+            // Vérifier le mimetype
+            const mimeType = imageMessage?.mimetype || 'image/jpeg';
+            
+            // Déterminer l'extension du fichier
+            let extension = 'jpg';
+            if (mimeType.includes('png')) extension = 'png';
+            if (mimeType.includes('webp')) extension = 'webp';
+            if (mimeType.includes('gif')) extension = 'gif';
 
-      const message = `
+            // Créer le FormData pour l'upload
+            const form = new FormData();
+            form.append('reqtype', 'fileupload');
+            form.append('fileToUpload', Readable.from(buffer), `image.${extension}`);
+
+            // Uploader sur Catbox
+            const response = await axios.post('https://catbox.moe/user/api.php', form, {
+                headers: form.getHeaders(),
+                timeout: 30000 // 30 secondes timeout
+            });
+
+            const url = response.data.trim();
+
+            // Message formaté (ENVOYÉ UNE SEULE FOIS)
+            const message = `
 ╭────「 𝗞𝗔𝗬𝗔-𝗠𝗗 」────⬣
-│ 🖼️ *Image détectée !*
-│ ✅ *Lien généré :*
+│ 📤 *Lien généré avecsuccès!*
+│ 🔗 *Lien Catbox :*
 │ ${url}
+│
+│ 📋 *Copie rapide :*
+│ \`\`\`${url}\`\`\`
 ╰──────────────────⬣`.trim();
 
-      await kaya.sendMessage(
-        m.chat,
-        { text: message, contextInfo },
-        { quoted: m }
-      );
+            // Envoyer le résultat UNE SEULE FOIS
+            await sock.sendMessage(m.chat, {
+                text: message
+            }, { quoted: m });
 
-    } catch (err) {
-      console.error('Erreur URL Catbox :', err.response?.data || err.message || err);
-      await kaya.sendMessage(
-        m.chat,
-        { text: '❌ Une erreur est survenue lors de la génération du lien.', contextInfo },
-        { quoted: m }
-      );
+        } catch (error) {
+            console.error('❌ Erreur commande url:', error);
+            
+            let errorMessage = '❌ Erreur lors de la génération du lien.';
+            
+            if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+                errorMessage = '❌ Catbox est inaccessible ou trop lent. Réessaie plus tard.';
+            } else if (error.response?.status === 413) {
+                errorMessage = '❌ L\'image est trop volumineuse (>20MB).';
+            } else if (error.message.includes('unsupported image')) {
+                errorMessage = '❌ Format d\'image non supporté par Catbox.';
+            }
+            
+            sock.sendMessage(m.chat, {
+                text: errorMessage
+            }, { quoted: m });
+        }
     }
-  }
 };

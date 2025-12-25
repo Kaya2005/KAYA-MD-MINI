@@ -1,177 +1,168 @@
-// ==================== commands/welcome.js ====================
 import fs from 'fs';
 import path from 'path';
-import decodeJid from '../system/decodeJid.js';
+import { fileURLToPath } from 'url';
 import { contextInfo } from '../system/contextInfo.js';
 import checkAdminOrOwner from '../system/checkAdmin.js';
 
-const welcomeFile = path.join(process.cwd(), 'data', 'welcome.json');
-let welcomeData = {};
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Charger ou créer le fichier welcome.json
-try {
-  welcomeData = JSON.parse(fs.readFileSync(welcomeFile, 'utf-8'));
-} catch {
-  welcomeData = {};
-  fs.writeFileSync(welcomeFile, JSON.stringify({}, null, 2));
-}
+const WELCOME_FILE = path.join(__dirname, '../data/welcome.json');
 
-function saveWelcomeData() {
-  fs.writeFileSync(welcomeFile, JSON.stringify(welcomeData, null, 2));
-}
+/* ================== INIT / LOAD / SAVE ================== */
+const initWelcomeFile = () => {
+  if (!fs.existsSync(WELCOME_FILE)) {
+    const dir = path.dirname(WELCOME_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(WELCOME_FILE, JSON.stringify({}, null, 2));
+  }
+};
 
+const loadWelcomeData = () => {
+  try {
+    initWelcomeFile();
+    return JSON.parse(fs.readFileSync(WELCOME_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+};
+
+const saveWelcomeData = (data) => {
+  fs.writeFileSync(WELCOME_FILE, JSON.stringify(data, null, 2));
+};
+
+/* ================== COMMANDE ================== */
 export default {
   name: 'welcome',
-  description: 'Active ou désactive le message de bienvenue dans les groupes',
-  category: 'Bot',
+  alias: ['bienvenue', 'wel'],
+  description: 'Active/désactive les messages de bienvenue',
+  category: 'owner',
 
-  run: async (kaya, m, msg, store, args) => {
+  async execute(sock, m, args) {
     try {
-      if (!m.isGroup) {
-        return kaya.sendMessage(
+      const permissions = await checkAdminOrOwner(sock, m.chat, m.sender);
+      if (!permissions.isOwner) {
+        return sock.sendMessage(
           m.chat,
-          { text: '❌ Cette commande fonctionne uniquement dans un groupe.', contextInfo },
-          { quoted: msg }
+          { text: '🚫 Commande réservée à l’owner du bot.', contextInfo },
+          { quoted: m }
         );
       }
 
-      const chatId = decodeJid(m.chat);
-      const sender = decodeJid(m.sender);
+      const welcomeData = loadWelcomeData();
+      const chatId = m.chat;
 
-      const permissions = await checkAdminOrOwner(kaya, chatId, sender);
-      const isAdminOrOwner = permissions.isAdminOrOwner || permissions.isOwner;
-
-      if (!isAdminOrOwner) {
-        return kaya.sendMessage(
+      if (!args.length) {
+        return sock.sendMessage(
           chatId,
-          { text: '🚫 Accès refusé : Seuls les admins ou owners peuvent utiliser cette commande.', contextInfo },
-          { quoted: msg }
+          {
+            text: `
+╭━━〔 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 〕━━⬣
+│
+│ • ${global.PREFIX}welcome on → Active dans ce groupe
+│ • ${global.PREFIX}welcome off → Désactive dans ce groupe
+│ • ${global.PREFIX}welcome all → Active globalement
+│ • ${global.PREFIX}welcome all off → Désactive globalement
+│ • ${global.PREFIX}welcome status → Voir le statut
+╰──────────────────⬣`.trim(),
+            contextInfo
+          },
+          { quoted: m }
         );
       }
 
-      const groupPP = await kaya.profilePictureUrl(chatId, 'image').catch(() => 'https://i.imgur.com/3XjWdoI.png');
+      const subCmd = args.join(' ').toLowerCase();
 
-      let subCmd = args[0]?.toLowerCase() || '';
-      if (!subCmd && m.body?.toLowerCase().startsWith('.welcome')) {
-        subCmd = m.body.toLowerCase().replace('.welcome', '').trim();
+      if (subCmd === 'all off') {
+        delete welcomeData.global;
+        saveWelcomeData(welcomeData);
+        return sock.sendMessage(chatId, { text: '❌ Welcome global désactivé.' }, { quoted: m });
+      }
+
+      if (subCmd === 'all') {
+        welcomeData.global = true;
+        saveWelcomeData(welcomeData);
+        return sock.sendMessage(chatId, { text: '✅ Welcome global activé.' }, { quoted: m });
       }
 
       if (subCmd === 'on' || subCmd === '1') {
         welcomeData[chatId] = true;
-        saveWelcomeData();
-        return kaya.sendMessage(chatId, {
-          image: { url: groupPP },
-          caption: '✅ *WELCOME ACTIVÉ* pour ce groupe !',
-          contextInfo
-        }, { quoted: msg });
+        saveWelcomeData(welcomeData);
+        return sock.sendMessage(chatId, { text: '✅ Welcome activé pour ce groupe.' }, { quoted: m });
       }
 
-      if (subCmd === 'off') {
+      if (subCmd === 'off' || subCmd === '0') {
         delete welcomeData[chatId];
-        saveWelcomeData();
-        return kaya.sendMessage(chatId, {
-          image: { url: groupPP },
-          caption: '❌ *WELCOME DÉSACTIVÉ* pour ce groupe.',
-          contextInfo
-        }, { quoted: msg });
+        saveWelcomeData(welcomeData);
+        return sock.sendMessage(chatId, { text: '❌ Welcome désactivé pour ce groupe.' }, { quoted: m });
       }
 
-      if (subCmd === 'all') {
-        if (!permissions.isOwner) {
-          return kaya.sendMessage(
-            chatId,
-            { text: '❌ Seul le propriétaire peut activer/désactiver pour tous les groupes.', contextInfo },
-            { quoted: msg }
-          );
-        }
-
-        if (args[1]?.toLowerCase() === 'off') {
-          delete welcomeData.global;
-          saveWelcomeData();
-          return kaya.sendMessage(chatId, {
-            image: { url: groupPP },
-            caption: '❌ *WELCOME DÉSACTIVÉ* pour tous les groupes 🌍',
-            contextInfo
-          }, { quoted: msg });
-        } else {
-          welcomeData.global = true;
-          saveWelcomeData();
-          return kaya.sendMessage(chatId, {
-            image: { url: groupPP },
-            caption: '✅ *WELCOME ACTIVÉ* pour tous les groupes 🌍',
-            contextInfo
-          }, { quoted: msg });
-        }
+      if (subCmd === 'status') {
+        const globalStatus = welcomeData.global ? '✅ Activé globalement' : '❌ Désactivé globalement';
+        const groupStatus = welcomeData[chatId] ? '✅ Activé ici' : '❌ Désactivé ici';
+        return sock.sendMessage(
+          chatId,
+          { text: `📊 *STATUT WELCOME*\n\n${globalStatus}\n${groupStatus}` },
+          { quoted: m }
+        );
       }
 
-      return kaya.sendMessage(chatId, {
-        text: '❓ Utilise `.welcome on`, `.welcome off`, `.welcome all` ou `.welcome all off`.',
-        contextInfo
-      }, { quoted: msg });
+      return sock.sendMessage(chatId, { text: '❌ Commande non reconnue.' }, { quoted: m });
 
     } catch (err) {
-      console.error('❌ Erreur welcome run :', err);
-      return kaya.sendMessage(
-        m.chat,
-        { text: `❌ Erreur welcome : ${err.message}`, contextInfo },
-        { quoted: msg }
-      );
+      console.error('❌ Erreur commande welcome:', err);
+      sock.sendMessage(m.chat, { text: '❌ Erreur lors de la configuration.' }, { quoted: m });
     }
   },
 
-  participantUpdate: async (kaya, update) => {
-    const chatId = decodeJid(update.id);
-    const { participants, action } = update;
+  /* ================== PARTICIPANT UPDATE ================== */
+  async participantUpdate(sock, update) {
+    try {
+      if (update.action !== 'add') return;
 
-    if (action !== 'add' || (!welcomeData.global && !welcomeData[chatId])) return;
+      const welcomeData = loadWelcomeData();
+      const chatId = update.id;
 
-    const now = new Date().toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+      if (!welcomeData.global && !welcomeData[chatId]) return;
 
-    for (const user of participants) {
-      try {
-        const metadata = await kaya.groupMetadata(chatId).catch(() => null);
-        if (!metadata) return;
+      const metadata = await sock.groupMetadata(chatId);
+      const now = new Date();
+      const date = now.toLocaleDateString('fr-FR');
+      const creationDate = metadata.creation ? new Date(metadata.creation * 1000).toLocaleDateString('fr-FR') : 'Inconnue';
 
-        const userPP = await kaya.profilePictureUrl(user, 'image').catch(() => null);
-        const imageUrl =
-          userPP || (await kaya.profilePictureUrl(chatId, 'image').catch(() => 'https://i.imgur.com/3XjWdoI.png'));
+      for (const user of update.participants) {
+        // Normalisation JID
+        const userJid = typeof user === 'string' ? user : user?.id || user?.jid;
+        if (!userJid) continue;
 
-        const username = '@' + user.split('@')[0];
+        const username = '@' + userJid.split('@')[0];
         const groupName = metadata.subject || 'Nom inconnu';
         const groupSize = metadata.participants.length;
-        const creationDate = new Date(metadata.creation * 1000).toLocaleDateString('fr-FR', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
 
         const welcomeText = `╭━━〔 WELCOME  〕━━⬣
 ├ 👤 Bienvenue ${username}
 ├ 🎓 Groupe: *${groupName}*
 ├ 👥 Membres : ${groupSize}
 ├ 🏗️ Créé le : ${creationDate}
-├ 📆 Date: ${now}
+├ 📆 Date: ${date}
 ├ 📜 \`Règles\` :
 │  ┗ Pas de liens interdits ❌
 │  ┗ Pas de contenu xxx 🔞
 │  ┗ Pas de spam 🚫
 ╰─────────────────────⬣`;
 
-        await kaya.sendMessage(chatId, {
-          image: { url: imageUrl },
-          caption: welcomeText,
-          mentions: [user],
-          contextInfo: { ...contextInfo, mentionedJid: [user] }
+        await sock.sendMessage(chatId, {
+          text: welcomeText,
+          mentions: [userJid],
+          contextInfo: { ...contextInfo, mentionedJid: [userJid] }
         });
 
-      } catch (err) {
-        console.error('❌ Erreur welcome participantUpdate :', err);
+        // Petit délai pour éviter double envoi
+        await new Promise(r => setTimeout(r, 500));
       }
+
+    } catch (err) {
+      console.error('❌ Welcome participant error:', err);
     }
   }
 };

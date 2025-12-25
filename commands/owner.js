@@ -1,27 +1,39 @@
-// ================= commands/owner.js =================
+// ================= commands/info.js =================
 import { contextInfo } from '../system/contextInfo.js';
 
-export const name = 'owner';
-export const description = '📞 Affiche le numéro du créateur du bot';
-export const category = 'Info';
+export default {
+  name: 'owner',
+  aliases: ['owner', 'dev'],
+  description: 'Informations sur le développeur du bot KAYA-MD',
+  category: 'Général',
 
-export async function run(kaya, m, msg, store, args) {
-  try {
-    const creatorNumber = '243993621718'; // Remplace par ton numéro
+  execute: async (kaya, m) => {
+    const text = `
+╭━━〔 INFORMATIONS DU BOT 〕━━⬣
+┃ Bot        : KAYA-MD MINI
+┃ Développeur: KAYA
+┃ Pays       : RDC 🇨🇩
+┃ En ligne   : Depuis 2025
+╰━━━━━━━━━━━━━━━━━━━━⬣
+
+╭━━〔 LIENS OFFICIELS 〕━━⬣
+┃ WhatsApp : wa.me/243999585890
+┃ YouTube  : youtube.com/@KAYATECH243
+┃ GitHub   : github.com/Kaya2005/KAYA
+┃ Telegram : t.me/techword1
+╰━━━━━━━━━━━━━━━━━━━━⬣
+
+Merci d’utiliser KAYA-MD.
+Bot simple, rapide et fiable.
+`.trim();
+
     await kaya.sendMessage(
       m.chat,
       {
-        text: `📞 *Numéro du créateur* : wa.me/${creatorNumber}`,
+        text,
         contextInfo
       },
       { quoted: m }
     );
-  } catch (err) {
-    console.error('❌ Erreur commande owner :', err);
-    await kaya.sendMessage(
-      m.chat,
-      { text: '⚠️ Impossible d’envoyer le numéro.', contextInfo },
-      { quoted: m }
-    );
   }
-}
+};

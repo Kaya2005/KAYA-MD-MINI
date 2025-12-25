@@ -1,44 +1,30 @@
-// ================= commands/left.js =================
-import config from '../config.js';
+// ==================== commands/left.js ====================
+import { contextInfo } from "../system/contextInfo.js";
 
 export default {
-  name: 'left',
-  description: 'Le bot quitte le groupe (owner uniquement)',
-  category: 'Owner',
-  ownerOnly: true, // ✅ ton handler gère déjà cette restriction
+  name: "left",
+  description: "🚪 Le bot quitte le groupe (Sécurité absolue)",
+  category: "Owner",
 
-  execute: async (kaya, m, args) => {
-    // ✅ Vérifie que l'expéditeur est bien un des owners
-    const senderId = m.sender.split('@')[0];
-    const owners = config.OWNER_NUMBER.split(',').map(o => o.trim());
-
-    if (!owners.includes(senderId)) {
-      return kaya.sendMessage(
-        m.chat,
-        { text: '🚫 Cette commande est réservée au propriétaire du bot.' },
-        { quoted: m }
-      );
-    }
-
-    // ✅ Vérifie que c'est un groupe
-    if (!m.isGroup) {
-      return kaya.sendMessage(
-        m.chat,
-        { text: '❗ Cette commande doit être utilisée dans un groupe.' },
-        { quoted: m }
-      );
-    }
-
+  run: async (kaya, m) => {
     try {
-      // ✅ Le bot quitte le groupe
+      // 🔐 Sécurité absolue
+      if (!m.fromMe) return;
+
+      // 📛 Groupe uniquement
+      if (!m.isGroup) {
+        return kaya.sendMessage(
+          m.chat,
+          { text: "❗ Cette commande s’utilise uniquement dans un groupe.", contextInfo },
+          { quoted: m }
+        );
+      }
+
+      // 🚪 Quitter le groupe (sans message inutile)
       await kaya.groupLeave(m.chat);
-    } catch (e) {
-      console.error('❌ Erreur leave:', e);
-      return kaya.sendMessage(
-        m.chat,
-        { text: '⚠️ Impossible de quitter le groupe.' },
-        { quoted: m }
-      );
+
+    } catch (err) {
+      console.error("❌ Erreur commande left :", err);
     }
   }
 };

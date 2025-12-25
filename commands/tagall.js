@@ -1,13 +1,12 @@
-// ==================== commands/tagall.js ====================
 import { contextInfo } from '../system/contextInfo.js';
 
 export default {
   name: "tagall",
   alias: ["mention", "everyone"],
-  description: "📢 Mentionne tous les membres du groupe avec un message personnalisé et élégant.",
+  description: "📢 Mentionne tous les membres du groupe avec une liste numérotée.",
   category: "Groupe",
   group: true,
-  admin: false, 
+  admin: false,
 
   execute: async (kaya, m, args) => {
     try {
@@ -23,33 +22,30 @@ export default {
       const participants = metadata.participants.map(p => p.id);
 
       const now = new Date();
-      const date = now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const date = now.toLocaleDateString('fr-FR');
       const time = now.toLocaleTimeString('fr-FR');
 
-      // 📌 Extraire uniquement les numéros pour affichage
-      const numbers = participants.map(p => p.split('@')[0]);
-      const mentionList = numbers.map(num => `👤 @${num}`).join('\n');
+      // 🔢 Liste numérotée + en ligne
+      const mentionText = participants
+        .map((p, i) => `${i + 1}. @${p.split('@')[0]}`)
+        .join('\n');
 
-      const fullMessage =
-`╔════════════════╗
-║   KAYA MD TAG ALL
-╚════════════════╝
+      const fullMessage = 
+`╔═══════ KAYA-MD ═══════
+📅 Date : ${date}
+⏰ Heure : ${time}
+👥 Membres : ${participants.length}
+╚═══════════════════════
 
-📅 Date: ${date}
-⏰ Heure: ${time}
-👥 Membres: ${participants.length}
+${mentionText}`;
 
-👥 Membres :
-${mentionList}`;
-
-      
       await kaya.sendMessage(
         m.chat,
         {
           text: fullMessage,
           mentions: participants
         },
-        { quoted: m } 
+        { quoted: m }
       );
 
     } catch (error) {

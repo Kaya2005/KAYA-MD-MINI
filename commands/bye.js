@@ -4,19 +4,19 @@ import checkAdminOrOwner from "../system/checkAdmin.js";
 import decodeJid from "../system/decodeJid.js";
 import { contextInfo } from "../system/contextInfo.js";
 
-const byeFile = path.join(process.cwd(), "data/bye.json");
+const BYE_FILE = path.join(process.cwd(), "data/bye.json");
 let byeData = {};
 
 // Charger ou créer le fichier
 try {
-  byeData = JSON.parse(fs.readFileSync(byeFile, "utf-8"));
+  byeData = JSON.parse(fs.readFileSync(BYE_FILE, "utf-8"));
 } catch {
   byeData = {};
-  fs.writeFileSync(byeFile, "{}");
+  fs.writeFileSync(BYE_FILE, JSON.stringify({}, null, 2));
 }
 
 function saveByeData() {
-  fs.writeFileSync(byeFile, JSON.stringify(byeData, null, 2));
+  fs.writeFileSync(BYE_FILE, JSON.stringify(byeData, null, 2));
 }
 
 export default {
@@ -26,13 +26,13 @@ export default {
   group: true,
   admin: true,
 
-  run: async (kaya, m, msg, store, args) => {
+  run: async (kaya, m, args) => {
     try {
       if (!m.isGroup) {
         return kaya.sendMessage(
           m.chat,
           { text: "❌ Cette commande fonctionne uniquement dans un groupe.", contextInfo },
-          { quoted: msg }
+          { quoted: m }
         );
       }
 
@@ -40,19 +40,18 @@ export default {
       const sender = decodeJid(m.sender);
 
       const permissions = await checkAdminOrOwner(kaya, chatId, sender);
-      if (!permissions.isAdminOrOwner) {
+      if (!permissions.isAdmin && !permissions.isOwner) {
         return kaya.sendMessage(
           chatId,
           { text: "❌ Seuls les admins ou le propriétaire peuvent utiliser cette commande.", contextInfo },
-          { quoted: msg }
+          { quoted: m }
         );
       }
 
-      let subCmd = args[0]?.toLowerCase();
-
-      // Photo du groupe
+      const subCmd = args[0]?.toLowerCase();
       const groupPP = await kaya.profilePictureUrl(chatId, "image").catch(() => "https://i.imgur.com/3XjWdoI.png");
 
+      // Activer pour le groupe
       if (subCmd === "on" || subCmd === "1") {
         byeData[chatId] = true;
         saveByeData();
@@ -63,7 +62,8 @@ export default {
         }, { quoted: m });
       }
 
-      if (subCmd === "off") {
+      // Désactiver pour le groupe
+      if (subCmd === "off" || subCmd === "0") {
         delete byeData[chatId];
         saveByeData();
         return kaya.sendMessage(chatId, { 
@@ -73,8 +73,28 @@ export default {
         }, { quoted: m });
       }
 
+      // Activer/Désactiver global
+      if (subCmd === "all") {
+        byeData.global = true;
+        saveByeData();
+        return kaya.sendMessage(chatId, { text: "✅ BYE global activé.", contextInfo }, { quoted: m });
+      }
+
+      if (subCmd === "alloff") {
+        delete byeData.global;
+        saveByeData();
+        return kaya.sendMessage(chatId, { text: "❌ BYE global désactivé.", contextInfo }, { quoted: m });
+      }
+
+      // Status
+      if (subCmd === "status") {
+        const globalStatus = byeData.global ? "✅ Activé globalement" : "❌ Désactivé globalement";
+        const groupStatus = byeData[chatId] ? "✅ Activé ici" : "❌ Désactivé ici";
+        return kaya.sendMessage(chatId, { text: `📊 *STATUT BYE*\n\n${globalStatus}\n${groupStatus}`, contextInfo }, { quoted: m });
+      }
+
       return kaya.sendMessage(chatId, {
-        text: "❓ Utilise `.bye on` ou `.bye off`.",
+        text: "❓ Utilise `.bye on` ou `.bye off`. Pour global : `.bye all` / `.bye alloff`",
         contextInfo
       }, { quoted: m });
 
@@ -89,40 +109,45 @@ export default {
   },
 
   participantUpdate: async (kaya, update) => {
-    const chatId = decodeJid(update.id);
-    const { participants, action } = update;
+    try {
+      const chatId = decodeJid(update.id);
+      const { participants, action } = update;
 
-    if (action !== "remove" || (!byeData.global && !byeData[chatId])) return;
+      // On ne s'intéresse qu'aux départs
+      if (action !== "remove") return;
+      if (!byeData.global && !byeData[chatId]) return;
 
-    for (const user of participants) {
-      try {
-        const metadata = await kaya.groupMetadata(chatId).catch(() => null);
-        if (!metadata) return;
+      const metadata = await kaya.groupMetadata(chatId).catch(() => null);
+      if (!metadata) return;
 
-        // Photo membre + fallback
-        const userPP = await kaya.profilePictureUrl(user, "image").catch(() => null);
-        const imageUrl = userPP || await kaya.profilePictureUrl(chatId, "image").catch(() => "https://i.imgur.com/3XjWdoI.png");
+      for (const user of participants) {
+        try {
+          const userJid = typeof user === "string" ? user : decodeJid(user.id || user);
+          const username = "@" + userJid.split("@")[0];
 
-        const username = "@" + user.split("@")[0];
-        const groupName = metadata.subject || "Nom inconnu";
-        const groupSize = metadata.participants.length;
+          const userPP = await kaya.profilePictureUrl(userJid, "image").catch(() => null);
+          const groupPP = await kaya.profilePictureUrl(chatId, "image").catch(() => "https://i.imgur.com/3XjWdoI.png");
 
-        const byeText = `╭━━〔 BYE 𝗞𝗔𝗬𝗔-𝗠𝗗 〕━━⬣
+          const byeText = `╭━━〔 KAYA-MD  〕━━⬣
 ├ 👋 Au revoir ${username}
-├ 🎓 Groupe: *${groupName}*
-├ 👥 Membres restants : ${groupSize}
+├ 🎓 Groupe: *${metadata.subject || "Nom inconnu"}*
+├ 👥 Membres restants : ${metadata.participants.length}
 ╰─────────────────────⬣`;
 
-        await kaya.sendMessage(chatId, {
-          image: { url: imageUrl },
-          caption: byeText,
-          mentions: [user],
-          contextInfo: { ...contextInfo, mentionedJid: [user] }
-        });
+          await kaya.sendMessage(chatId, {
+            image: { url: userPP || groupPP },
+            caption: byeText,
+            mentions: [userJid],
+            contextInfo: { ...contextInfo, mentionedJid: [userJid] }
+          });
 
-      } catch (err) {
-        console.error("❌ Erreur bye participantUpdate :", err);
+        } catch (err) {
+          console.error("❌ Erreur bye participant :", err);
+        }
       }
+
+    } catch (err) {
+      console.error("❌ Erreur bye participantUpdate :", err);
     }
   }
 };

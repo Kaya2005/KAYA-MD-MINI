@@ -10,11 +10,11 @@ export default {
     const texte = `
 ╭━━────〔  SUPPORT  〕─────━━⬣
 ├ 
-🔗 GitHub Bot : https://github.com/Kaya2005/KAYA-MD-MINI
+🔗 GitHub Bot : https://github.com/Kaya2005/KIRA-MD
 ├ 
 📺 Tutoriel Déploiement : https://youtube.com/@KAYATECH243
 ├
-💬 Groupe WhatsApp : https://chat.whatsapp.com/DZotf319LZy4D6Qxw5A0cn?mode=ems_copy_t
+💬 Groupe WhatsApp : https://chat.whatsapp.com/DoMh6jWjly2ErwVppmCGZo
 ╰──────────────────────────⬣
 
 N’hésite pas à poser tes questions et à suivre les tutoriels !

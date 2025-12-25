@@ -1,79 +1,75 @@
-import config, { saveConfig } from '../config.js';
-import { contextInfo } from '../system/contextInfo.js';
+import config, { saveConfig } from "../config.js";
+import { contextInfo } from "../system/contextInfo.js";
 
-function normalize(number) {
-  return number.split('@')[0].replace(/\D/g, '').trim();
-}
+// 🔹 Normalise un numéro
+const normalize = (jid) => jid.split("@")[0].replace(/\D/g, "");
 
 export default {
-  name: 'sudo',
-  description: '➕ Ajoute un nouvel owner (réservé au propriétaire principal)',
-  category: 'Owner',
-  ownerOnly: true,
+  name: "sudo",
+  description: "👑 Ajouter un owner (Owner uniquement)",
+  category: "Owner",
 
-  run: async (kaya, m, msg, store, args) => {
+  run: async (kaya, m, args) => {
     try {
-      const sender = normalize(m.sender);
-      const mainOwner = normalize(config.OWNER_NUMBER.split(',')[0]);
+      // 🔐 Sécurité absolue : seulement l’owner principal
+      if (!m.fromMe) return;
 
-      // ✅ Vérifie que seul le propriétaire principal peut utiliser
-      if (sender !== mainOwner) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '🚫 *Seul le propriétaire principal peut utiliser cette commande.*', contextInfo },
-          { quoted: m }
-        );
-      }
+      console.log("🟢 sudo command triggered");
 
-      // ✅ Récupération du numéro cible
-      let targetId;
+      // 📋 Owners actuels
+      const owners = config.OWNER_NUMBER
+        .split(",")
+        .map(o => normalize(o));
+
+      // 🎯 Cible
+      let target;
       if (m.quoted?.sender) {
-        targetId = normalize(m.quoted.sender);
+        target = normalize(m.quoted.sender);
       } else if (args[0]) {
-        targetId = args[0].replace(/\D/g, '').trim();
+        target = args[0].replace(/\D/g, "");
       } else {
         return kaya.sendMessage(
           m.chat,
-          { text: '❌ *Fournis un numéro ou réponds à un message pour ajouter comme owner.*', contextInfo },
+          { text: "❌ Utilisation : sudo <numéro> ou répondre à un message.", contextInfo },
           { quoted: m }
         );
       }
 
-      // ✅ Vérifie si déjà owner
-      let owners = config.OWNER_NUMBER.split(',').map(normalize);
-
-      if (owners.includes(targetId)) {
+      if (owners.includes(target)) {
         return kaya.sendMessage(
           m.chat,
-          { text: `ℹ️ *@${targetId}* est déjà owner.`, mentions: [targetId + '@s.whatsapp.net'], contextInfo },
+          {
+            text: `ℹ️ *@${target}* est déjà owner.`,
+            mentions: [target + "@s.whatsapp.net"],
+            contextInfo
+          },
           { quoted: m }
         );
       }
 
-      // ✅ Ajoute et sauvegarde
-      owners.push(targetId);
-      if (saveConfig) saveConfig({ OWNER_NUMBER: owners.join(',') });
+      // ➕ Ajout
+      owners.push(target);
+      saveConfig({ OWNER_NUMBER: owners.join(",") });
 
+      console.log("✅ Nouvel owner ajouté :", target);
+
+      // 📤 Confirmation
       return kaya.sendMessage(
         m.chat,
         {
-          text: `╭━━〔 👑 AJOUT OWNER 〕━━⬣
-├ 📲 Numéro : @${targetId}
-├ ✅ Statut : *Ajouté comme OWNER avec succès !*
-├ 🔐 Accès : *Total au bot KAYA-MD*
-╰────────────────────⬣`,
-          mentions: [targetId + '@s.whatsapp.net'],
+          text: `╭━━〔 👑 OWNER AJOUTÉ 〕━━⬣
+├ 📲 Numéro : @${target}
+├ ✅ Statut : *OWNER*
+├ 🔐 Accès : *Total*
+╰──────────────────⬣`,
+          mentions: [target + "@s.whatsapp.net"],
           contextInfo
         },
         { quoted: m }
       );
+
     } catch (err) {
-      console.error("❌ Erreur commande sudo:", err);
-      return kaya.sendMessage(
-        m.chat,
-        { text: "⚠️ Impossible d’ajouter ce membre comme owner.", contextInfo },
-        { quoted: m }
-      );
+      console.error("❌ Erreur sudo :", err);
     }
   }
 };

@@ -1,82 +1,114 @@
-// ==================== commands/vv.js ====================
-import { downloadMediaMessage } from '@rexxhayanasi/elaina-bail';
-import { contextInfo } from '../system/contextInfo.js';
-
-// Util : convertir buffer
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
-  name: 'vv',
-  description: 'Convertit une photo vue unique en photo normale',
-  category: 'Utils',
+    name: 'vv',
+    alias: ['viewonce', 'unview', 'voir', 'photo'],
+    description: 'Re-envoie une photo (vue unique ou normale) - UNE SEULE FOIS',
+    category: 'utils',
+    usage: '<répondre à une photo>',
+    async execute(sock, m, args) {
+        try {
+            // Récupérer le message cité
+            const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            
+            // Fonction pour trouver UNE SEULE image (la première trouvée)
+            const findSingleImage = () => {
+                // 1. D'abord chercher dans le message cité (priorité)
+                if (quoted) {
+                    // Vue unique
+                    if (quoted.viewOnceMessage?.message?.imageMessage) {
+                        return {
+                            image: quoted.viewOnceMessage.message.imageMessage,
+                            type: 'viewonce'
+                        };
+                    }
+                    if (quoted.viewOnceMessageV2?.message?.imageMessage) {
+                        return {
+                            image: quoted.viewOnceMessageV2.message.imageMessage,
+                            type: 'viewonce'
+                        };
+                    }
+                    if (quoted.viewOnceMessageV2Extension?.message?.imageMessage) {
+                        return {
+                            image: quoted.viewOnceMessageV2Extension.message.imageMessage,
+                            type: 'viewonce'
+                        };
+                    }
+                    // Photo normale
+                    if (quoted.imageMessage) {
+                        return {
+                            image: quoted.imageMessage,
+                            type: 'normal'
+                        };
+                    }
+                }
+                
+                // 2. Ensuite chercher dans le message courant (si pas cité)
+                if (m.message?.imageMessage) {
+                    return {
+                        image: m.message.imageMessage,
+                        type: 'normal'
+                    };
+                }
+                
+                return null;
+            };
 
-  run: async (kaya, m) => {
-    try {
-      // 🔹 Récupère le message reply
-      const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      const current = m.message;
-      let targetMsg = quoted || current;
+            // Trouver UNE SEULE image
+            const imageData = findSingleImage();
+            
+            if (!imageData) {
+                return sock.sendMessage(m.chat, {
+                    text: '⚠️ *Usage:* Réponds à une photo avec `.vv`\n\n*Exemples:*\n• .vv (en réponse à une photo)\n• .photo (alias)'
+                }, { quoted: m });
+            }
 
-      if (!targetMsg) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '⚠️ Réponds à une *photo vue unique* avec `.vv`', contextInfo },
-          { quoted: m }
-        );
-      }
+            // Indiquer que le bot traite l'image (UNE SEULE FOIS)
+            await sock.sendPresenceUpdate('composing', m.chat);
 
-      // 🔹 Détection viewOnce
-      if (targetMsg.viewOnceMessageV2) {
-        targetMsg = targetMsg.viewOnceMessageV2.message;
-      } else if (targetMsg.viewOnceMessageV2Extension) {
-        targetMsg = targetMsg.viewOnceMessageV2Extension.message;
-      } else if (targetMsg.viewOnceMessage) {
-        targetMsg = targetMsg.viewOnceMessage.message;
-      }
+            // Télécharger l'image (UNE SEULE FOIS)
+            const stream = await downloadContentFromMessage(imageData.image, 'image');
+            
+            // Convertir stream en Buffer (UNE SEULE FOIS)
+            const chunks = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+            const buffer = Buffer.concat(chunks);
 
-      // 🔹 Vérifie si c'est bien une image
-      if (!targetMsg.imageMessage) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '⚠️ Ce n’est pas une *photo vue unique* valide.', contextInfo },
-          { quoted: m }
-        );
-      }
+            if (!buffer || buffer.length < 100) {
+                return sock.sendMessage(m.chat, {
+                    text: '❌ Impossible de lire cette photo.'
+                }, { quoted: m });
+            }
 
-      const node = targetMsg.imageMessage;
+            // Préparer le caption (UNE FOIS)
+            const caption = imageData.image.caption || 
+                          (imageData.type === 'viewonce' ? '✅ Photo vue unique renvoyée' : '✅ Photo renvoyée');
+            
+            const mimetype = imageData.image.mimetype || 'image/jpeg';
 
-      // 🔹 Télécharge en buffer avec Elaina Bail
-      const buffer = await downloadMediaMessage(node, 'image', { logger: kaya.logger });
+            // 🔹 ENVOYER LA PHOTO UNE SEULE FOIS
+            await sock.sendMessage(m.chat, {
+                image: buffer,
+                caption: caption,
+                mimetype: mimetype
+            }, { quoted: m });
 
-      if (!buffer || buffer.length < 100) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Impossible de lire cette image.', contextInfo },
-          { quoted: m }
-        );
-      }
+            // C'EST TOUT ! Pas d'autre envoi
 
-      // 🔹 Récupère le caption si existant
-      const caption = node.caption || '✅ Photo convertie en normale.';
-
-      // 🔹 Envoie comme photo normale
-      await kaya.sendMessage(
-        m.chat,
-        { image: buffer, caption, contextInfo },
-        { quoted: m }
-      );
-
-    } catch (err) {
-      console.error('❌ Erreur commande vv:', err);
-      await kaya.sendMessage(
-        m.chat,
-        { text: '❌ Erreur lors de la conversion de la photo.', contextInfo },
-        { quoted: m }
-      );
+        } catch (error) {
+            console.error('❌ Erreur commande vv:', error);
+            
+            let errorMessage = '❌ Erreur lors du traitement de la photo.';
+            
+            if (error.message.includes('download')) {
+                errorMessage = '❌ Impossible de télécharger la photo.';
+            }
+            
+            sock.sendMessage(m.chat, {
+                text: errorMessage
+            }, { quoted: m });
+        }
     }
-  }
 };

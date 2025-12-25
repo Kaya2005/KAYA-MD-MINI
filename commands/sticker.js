@@ -1,92 +1,69 @@
-// ==================== commands/sticker.js ====================
-import { downloadMediaMessage, downloadContentFromMessage } from '@rexxhayanasi/elaina-bail';
-import { Sticker, StickerTypes } from 'wa-sticker-formatter';
-import { contextInfo } from '../system/contextInfo.js';
-
-async function streamToBuffer(stream) {
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
+import { addExif } from '../lib/sticker.js';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
-  name: 'sticker',
-  description: 'Convertit une image (ou courte vidéo) en sticker',
-  category: 'Stickers',
-
-  run: async (kaya, m) => {
-    try {
-      const target = m.quoted ? m.quoted : m;
-
-      if (!target.mtype || !['imageMessage', 'videoMessage'].includes(target.mtype)) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Réponds à une image ou vidéo.', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      if (target.mtype === 'videoMessage') {
-        const seconds = target.msg?.seconds || target.seconds || 0;
-        if (seconds > 8) {
-          return kaya.sendMessage(
-            m.chat,
-            { text: '⏱️ La vidéo est trop longue. Max 8 secondes.', contextInfo },
-            { quoted: m }
-          );
-        }
-      }
-
-      let buffer;
-
-      // Cas spécial Elaina Bail : message a déjà une méthode download()
-      if (typeof target.download === 'function') {
-        buffer = await target.download();
-      }
-
-      // Sinon on tente downloadMediaMessage
-      if (!buffer) {
+    name: 'sticker',
+    alias: ['s', 'stiker', 'stick'],
+    description: 'Convertir une image en sticker',
+    category: 'media',
+    usage: '<répondre à une image> ou <envoyer une image avec légende .sticker>',
+    async execute(sock, m, args) {
         try {
-          buffer = await downloadMediaMessage(target, 'buffer', undefined, {
-            logger: kaya.logger,
-            reuploadRequest: kaya.updateMediaMessage
-          });
-        } catch (err1) {
-          // Fallback classique
-          const node = target.message?.[target.mtype] || target.msg;
-          if (!node) throw new Error('Message média introuvable (aucun node)');
+            const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const isQuotedImage = quoted?.imageMessage;
+            const isImage = m.message?.imageMessage;
+            
+            if (!isQuotedImage && !isImage) {
+                return sock.sendMessage(m.chat, {
+                    text: '⚠️ *Usage:* Réponds à une image ou envoie une image avec la légende .sticker\n\n*Exemples:*\n• .sticker (en réponse à une image)\n• .s (alias)'
+                }, { quoted: m });
+            }
 
-          const kind = target.mtype === 'imageMessage' ? 'image' : 'video';
-          const stream = await downloadContentFromMessage(node, kind);
-          buffer = await streamToBuffer(stream);
+            // Indiquer que le bot traite l'image
+            await sock.sendPresenceUpdate('composing', m.chat);
+
+            // Télécharger le média avec la nouvelle méthode
+            let downloadStream;
+            if (isQuotedImage) {
+                downloadStream = await downloadContentFromMessage(quoted.imageMessage, 'image');
+            } else {
+                downloadStream = await downloadContentFromMessage(m.message.imageMessage, 'image');
+            }
+
+            // Convertir le stream en Buffer
+            const bufferChunks = [];
+            for await (const chunk of downloadStream) {
+                bufferChunks.push(chunk);
+            }
+            const buffer = Buffer.concat(bufferChunks);
+            
+            if (!buffer || buffer.length === 0) {
+                return sock.sendMessage(m.chat, {
+                    text: '❌ Erreur lors du téléchargement de l\'image (buffer vide)'
+                }, { quoted: m });
+            }
+
+            // Créer le sticker
+            const stickerOptions = {
+                packname: global.packname || 'KAYA-MD',
+                author: global.author || 'kaya-tech',
+                categories: ['🤩', '🎉'],
+                quality: 50
+            };
+
+            const stickerBuffer = await addExif(buffer, stickerOptions);
+            
+            // Envoyer le sticker
+            await sock.sendMessage(m.chat, {
+                sticker: stickerBuffer,
+                mimetype: 'image/webp'
+            }, { quoted: m });
+
+        } catch (error) {
+            console.error('❌ Erreur commande sticker:', error);
+            sock.sendMessage(m.chat, {
+                text: `❌ Erreur: ${error.message}\n\nAssure-toi que:\n• L'image n'est pas trop grande\n• Le format est supporté (jpg, png, webp)`
+            }, { quoted: m });
         }
-      }
-
-      if (!buffer || buffer.length < 100) {
-        return kaya.sendMessage(
-          m.chat,
-          { text: '❌ Impossible de lire ce média.', contextInfo },
-          { quoted: m }
-        );
-      }
-
-      const pseudo = m.pushName || 'User';
-      const sticker = new Sticker(buffer, {
-        author: `${pseudo} by KAYA-MD`,
-        type: StickerTypes.FULL,
-        quality: 80
-      });
-
-      const webp = await sticker.build();
-      await kaya.sendMessage(m.chat, { sticker: webp }, { quoted: m });
-
-    } catch (err) {
-      console.error('Sticker final error:', err);
-      return kaya.sendMessage(
-        m.chat,
-        { text: '❌ Erreur lors de la création du sticker.', contextInfo },
-        { quoted: m }
-      );
     }
-  }
 };
