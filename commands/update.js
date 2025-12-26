@@ -7,7 +7,7 @@ export default {
 
   run: async (kaya, m) => {
 
-    /
+    
     if (!m.fromMe) return;
 
     try {
