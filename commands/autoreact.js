@@ -1,5 +1,5 @@
 // ==================== commands/autoreact.js ====================
-import { saveBotModes } from '../system/botModes.js';
+import { saveBotModes } from '../system/botStatus.js';
 import { contextInfo } from '../system/contextInfo.js';
 
 // 🎲 Emojis aléatoires
@@ -19,7 +19,7 @@ export default {
 
   run: async (kaya, m, args) => {
     try {
-      // 🔐 OWNER UNIQUEMENT (comme prefix.js)
+      // 🔐 OWNER UNIQUEMENT
       if (!m.fromMe) return;
 
       global.botModes = global.botModes || {};
@@ -52,9 +52,7 @@ Le bot réagit automatiquement aux messages avec des emojis aléatoires.`,
         saveBotModes(global.botModes);
 
         const emoji = getRandomEmoji();
-        await kaya.sendMessage(m.chat, {
-          react: { text: emoji, key: m.key }
-        });
+        await kaya.sendMessage(m.chat, { react: { text: emoji, key: m.key } });
 
         return kaya.sendMessage(
           m.chat,
@@ -73,10 +71,7 @@ Le bot réagit automatiquement aux messages avec des emojis aléatoires.`,
 
         return kaya.sendMessage(
           m.chat,
-          {
-            text: '❌ *Auto-react désactivé*',
-            contextInfo
-          },
+          { text: '❌ *Auto-react désactivé*', contextInfo },
           { quoted: m }
         );
       }
@@ -103,10 +98,7 @@ Le bot réagit automatiquement aux messages avec des emojis aléatoires.`,
           setTimeout(async () => {
             try {
               await kaya.sendMessage(m.chat, {
-                react: {
-                  text: getRandomEmoji(),
-                  key: m.key
-                }
+                react: { text: getRandomEmoji(), key: m.key }
               });
             } catch {}
           }, i * 400);
@@ -114,16 +106,18 @@ Le bot réagit automatiquement aux messages avec des emojis aléatoires.`,
 
         return kaya.sendMessage(
           m.chat,
-          {
-            text: '🧪 *Test auto-react envoyé (5 emojis)*',
-            contextInfo
-          },
+          { text: '🧪 *Test auto-react envoyé (5 emojis)*', contextInfo },
           { quoted: m }
         );
       }
 
     } catch (err) {
       console.error('❌ autoreact error:', err);
+      return kaya.sendMessage(
+        m.chat,
+        { text: '❌ Une erreur est survenue.', contextInfo },
+        { quoted: m }
+      );
     }
   }
 };

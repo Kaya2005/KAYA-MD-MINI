@@ -1,17 +1,18 @@
 // ==================== commands/unlock.js ====================
 import checkAdminOrOwner from '../system/checkAdmin.js'; 
-import { contextInfo } from '../system/contextInfo.js'; // import centralisé
+import { contextInfo } from '../system/contextInfo.js';
 
 export default {
   name: 'unlock',
-  description: 'Ouvre le groupe (tout le monde peut écrire).',
+  description: '🔓 Ouvre le groupe (tout le monde peut écrire)',
+  category: 'Groupe',
   group: true,
   admin: true,
   botAdmin: true,
 
   run: async (kaya, m, msg, store, args) => {
     try {
-      // ✅ Vérifie si l’utilisateur est admin ou owner
+      // 🔹 Vérifie si l’utilisateur est admin / owner
       const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
       if (!permissions.isAdminOrOwner) {
         return kaya.sendMessage(
@@ -21,7 +22,7 @@ export default {
         );
       }
 
-      // ✅ Débloque le groupe pour tous
+      // 🔹 Débloque le groupe (tout le monde peut écrire)
       await kaya.groupSettingUpdate(m.chat, 'not_announcement');
 
       const text = `
@@ -38,7 +39,7 @@ export default {
       );
 
     } catch (err) {
-      console.error('Erreur unlock.js :', err);
+      console.error('❌ Erreur unlock.js :', err);
       await kaya.sendMessage(
         m.chat,
         { text: '❌ Impossible d’ouvrir le groupe. Vérifie que je suis admin.', contextInfo },

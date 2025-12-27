@@ -1,4 +1,3 @@
-// ==================== commands/antispam.js ====================
 import fs from "fs";
 import path from "path";
 import { contextInfo } from "../system/contextInfo.js";
@@ -52,11 +51,12 @@ export default {
       );
     }
 
+    // ✅ Vérification admin/owner via checkAdminOrOwner
     const check = await checkAdminOrOwner(kaya, chatId, m.sender);
     if (!check.isAdminOrOwner) {
       return kaya.sendMessage(
         chatId,
-        { text: "🚫 Admin ou Owner uniquement.", contextInfo },
+        { text: "🚫 Seuls les Admins ou le Propriétaire peuvent utiliser cette commande.", contextInfo },
         { quoted: m }
       );
     }

@@ -10,7 +10,7 @@ function initConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify({ enabled: false }, null, 2));
   }
-  return JSON.parse(fs.readFileSync(CONFIG_PATH));
+  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
 }
 
 // 🎯 Vérifie si autoread est activé

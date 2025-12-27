@@ -1,3 +1,4 @@
+// ==================== commands/revoke.js ====================
 import checkAdminOrOwner from '../system/checkAdmin.js';
 
 export default {
@@ -12,25 +13,35 @@ export default {
     try {
       if (!m.isGroup) return;
 
-      // ✅ Vérifie si la personne qui lance est admin/owner
+      // 🔹 Vérification admin / owner
       const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
       if (!permissions.isAdminOrOwner) return;
 
-      // ✅ Récupère la cible (tag, reply ou numéro)
-      const target = m.message?.[Object.keys(m.message)[0]]?.contextInfo?.mentionedJid?.[0]
-        || m.quoted?.sender
-        || (args[0] ? (args[0].includes('@') ? args[0] : `${args[0]}@s.whatsapp.net`) : null);
+      // 🔹 Récupération de la cible : mention, réponse ou numéro
+      let target = m.message?.[Object.keys(m.message)[0]]?.contextInfo?.mentionedJid?.[0]
+                  || m.quoted?.sender
+                  || (args[0] ? (args[0].includes('@') ? args[0] : `${args[0]}@s.whatsapp.net`) : null);
 
-      if (!target) return;
+      if (!target) {
+        return kaya.sendMessage(m.chat, { text: '⚙️ Usage : `.revoke @utilisateur` ou répondre à son message.' }, { quoted: m });
+      }
 
-      // ✅ Exécute la rétrogradation silencieuse
+      // 🔹 Vérification que la cible n’est pas un admin
+      const groupMetadata = await kaya.groupMetadata(m.chat);
+      const groupAdmins = groupMetadata.participants
+        .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+        .map(p => p.id);
+
+      if (!groupAdmins.includes(target)) return; // cible déjà non-admin
+
+      // 🔹 Rétrogradation silencieuse
       await kaya.groupParticipantsUpdate(m.chat, [target], 'demote');
 
-      // ❌ Aucun message envoyé
+      // ❌ Aucun message envoyé au groupe
       return;
 
     } catch (err) {
-      console.error('❌ Erreur demote :', err);
+      console.error('❌ Erreur revoke :', err);
       return;
     }
   }

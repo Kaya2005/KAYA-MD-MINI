@@ -10,23 +10,12 @@ export default {
   admin: true,
   botAdmin: true,
 
-  run: async (kaya, m, msg, store, args) => {
+  run: async (kaya, m, args) => {
     const chatId = m.chat;
 
     try {
-      // 🔹 Metadata groupe
-      const groupMetadata = await kaya.groupMetadata(chatId);
-      const participants = groupMetadata.participants || [];
-
-      // 🔹 Vérification admin
-      const permissions = await checkAdminOrOwner(
-        kaya,
-        chatId,
-        m.sender,
-        participants,
-        groupMetadata
-      );
-
+      // 🔹 Vérification admin / owner
+      const permissions = await checkAdminOrOwner(kaya, chatId, m.sender);
       if (!permissions.isAdminOrOwner) {
         return kaya.sendMessage(
           chatId,
@@ -35,6 +24,10 @@ export default {
         );
       }
 
+      // 🔹 Récupération metadata du groupe
+      const groupMetadata = await kaya.groupMetadata(chatId);
+      const participants = groupMetadata.participants || [];
+
       // ==================== CIBLE ====================
       let target = null;
 
@@ -42,12 +35,10 @@ export default {
       if (m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
         target = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
       }
-
       // Réponse à un message
       else if (m.message?.extendedTextMessage?.contextInfo?.participant) {
         target = m.message.extendedTextMessage.contextInfo.participant;
       }
-
       // Numéro écrit
       else if (args[0]) {
         target = args[0].replace(/[^0-9]/g, "") + "@s.whatsapp.net";

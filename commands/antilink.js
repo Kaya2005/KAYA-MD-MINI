@@ -1,7 +1,7 @@
 // ==================== commands/antilink.js ====================
 import fs from "fs";
 import path from "path";
-import { contextInfo } from "../system/contextInfo.js";
+import checkAdminOrOwner from "../system/checkAdmin.js";
 
 // 📂 Fichier de sauvegarde
 const antiLinkFile = path.join(process.cwd(), "data/antiLinkGroups.json");
@@ -13,16 +13,19 @@ function loadAntiLinkGroups() {
       return JSON.parse(fs.readFileSync(antiLinkFile, "utf-8"));
     }
   } catch (err) {
-    console.error('❌ Erreur chargement antiLinkGroups.json:', err);
+    console.error("❌ Erreur chargement antiLinkGroups.json:", err);
   }
   return {};
 }
 
 function saveAntiLinkGroups() {
   try {
-    fs.writeFileSync(antiLinkFile, JSON.stringify(global.antiLinkGroups, null, 2));
+    fs.writeFileSync(
+      antiLinkFile,
+      JSON.stringify(global.antiLinkGroups, null, 2)
+    );
   } catch (err) {
-    console.error('❌ Erreur sauvegarde antiLinkGroups.json:', err);
+    console.error("❌ Erreur sauvegarde antiLinkGroups.json:", err);
   }
 }
 
@@ -38,164 +41,170 @@ export default {
   admin: true,
   botAdmin: true,
 
-  // ----------------- Commande -----------------
+  // ==================== COMMANDE ====================
   run: async (kaya, m, args) => {
     try {
       const chatId = m.chat;
+
       if (!m.isGroup) {
-        return kaya.sendMessage(chatId, { text: "❌ Cette commande fonctionne uniquement dans un groupe.", contextInfo }, { quoted: m });
-      }
-
-      const metadata = await kaya.groupMetadata(chatId);
-      const botId = kaya.user.id;
-      const botParticipant = metadata.participants.find(p => p.id === botId);
-      const botIsAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-
-      if (!botIsAdmin) {
-        return kaya.sendMessage(chatId, { text: "❌ Je dois être admin pour activer ou gérer l'anti-link.", contextInfo }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text: "❌ Cette commande fonctionne uniquement dans un groupe." },
+          { quoted: m }
+        );
       }
 
       const action = args[0]?.toLowerCase();
       if (!action || !["on", "off", "delete", "warn", "kick", "status"].includes(action)) {
-        return kaya.sendMessage(chatId, { 
-          text: `🔗 *Anti-link - Commandes*\n
-⚙️ Utilisation :
-• .antilink on - Active (mode warn par défaut)
-• .antilink off - Désactive
-• .antilink delete - Supprime les liens
-• .antilink warn - Avertit (max 4)
-• .antilink kick - Expulse immédiatement
-• .antilink status - Voir l'état`,
-          contextInfo 
-        }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text:
+`🔗 *ANTI-LINK*
+
+.antilink on      → Activer (mode WARN)
+.antilink off     → Désactiver
+.antilink delete  → Supprimer les liens
+.antilink warn    → 4 avertissements = kick
+.antilink kick    → Expulsion directe
+.antilink status  → Voir l'état`
+          },
+          { quoted: m }
+        );
       }
 
+      // 📊 STATUS (autorisé à tous)
       if (action === "status") {
-        const groupData = global.antiLinkGroups[chatId];
-        let statusText = "";
-
-        if (!groupData || !groupData.enabled) {
-          statusText = "❌ Anti-link est DÉSACTIVÉ dans ce groupe.";
-        } else {
-          const mode = groupData.mode || "warn";
-          statusText = `✅ Anti-link est ACTIVÉ\n📊 Mode : ${mode.toUpperCase()}\n`;
-
-          if (mode === "warn") {
-            const warns = global.userWarns[chatId] || {};
-            const warnCount = Object.keys(warns).length;
-            if (warnCount > 0) statusText += `⚠️ ${warnCount} utilisateur(s) averti(s)\n`;
-          }
+        const data = global.antiLinkGroups[chatId];
+        if (!data || !data.enabled) {
+          return kaya.sendMessage(
+            chatId,
+            { text: "❌ Anti-link désactivé dans ce groupe." },
+            { quoted: m }
+          );
         }
 
-        return kaya.sendMessage(chatId, { text: statusText, contextInfo }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text: `✅ Anti-link ACTIVÉ\n📊 Mode : ${data.mode.toUpperCase()}` },
+          { quoted: m }
+        );
       }
 
+      // 🔐 Vérification admin/owner pour tous les admins
+      const check = await checkAdminOrOwner(kaya, chatId, m.sender);
+      if (!check.isAdminOrOwner) {
+        return kaya.sendMessage(
+          chatId,
+          { text: "🚫 Admin ou Owner uniquement." },
+          { quoted: m }
+        );
+      }
+
+      // ---------- ACTIONS ----------
       if (action === "on") {
         global.antiLinkGroups[chatId] = { enabled: true, mode: "warn" };
         saveAntiLinkGroups();
-        return kaya.sendMessage(chatId, { text: "✅ *Anti-link activé !*\nMode par défaut : WARN (4 avertissements = kick)", contextInfo }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text: "✅ Anti-link activé\n⚠️ Mode WARN (4 avertissements = expulsion)" },
+          { quoted: m }
+        );
       }
 
       if (action === "off") {
         delete global.antiLinkGroups[chatId];
+        delete global.userWarns[chatId];
         saveAntiLinkGroups();
-        if (global.userWarns[chatId]) delete global.userWarns[chatId];
-        return kaya.sendMessage(chatId, { text: "❌ *Anti-link désactivé* pour ce groupe.\nTous les avertissements ont été réinitialisés.", contextInfo }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text: "❌ Anti-link désactivé et avertissements réinitialisés." },
+          { quoted: m }
+        );
       }
 
       if (["delete", "warn", "kick"].includes(action)) {
-        if (!global.antiLinkGroups[chatId]) global.antiLinkGroups[chatId] = { enabled: true };
-        global.antiLinkGroups[chatId].enabled = true;
-        global.antiLinkGroups[chatId].mode = action;
+        global.antiLinkGroups[chatId] = { enabled: true, mode: action };
         saveAntiLinkGroups();
-
-        let modeDescription = action === "delete" ? "Les liens seront supprimés sans avertissement."
-                            : action === "warn" ? "4 avertissements = expulsion automatique."
-                            : "Expulsion immédiate dès le premier lien.";
-
-        return kaya.sendMessage(chatId, { text: `✅ Mode *${action.toUpperCase()}* activé pour l'anti-link.\n${modeDescription}`, contextInfo }, { quoted: m });
+        return kaya.sendMessage(
+          chatId,
+          { text: `✅ Mode Anti-link réglé sur : ${action.toUpperCase()}` },
+          { quoted: m }
+        );
       }
 
     } catch (err) {
       console.error("❌ Erreur antilink.js :", err);
-      return kaya.sendMessage(m.chat, { text: "❌ Impossible de modifier l'anti-link.", contextInfo }, { quoted: m });
+      return kaya.sendMessage(
+        m.chat,
+        { text: "❌ Une erreur est survenue avec la commande anti-link." },
+        { quoted: m }
+      );
     }
   },
 
-  // ----------------- Détection -----------------
+  // ==================== DÉTECTION ANTI-LINK ====================
   detect: async (kaya, m) => {
     try {
+      if (!m.isGroup || m.key?.fromMe) return;
       const chatId = m.chat;
-      if (!m.isGroup) return;
-      if (m.key?.fromMe) return;
       if (!global.antiLinkGroups?.[chatId]?.enabled) return;
 
-      const metadata = await kaya.groupMetadata(chatId);
-      const botId = kaya.user.id;
-      const botParticipant = metadata.participants.find(p => p.id === botId);
-      const botIsAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-      if (!botIsAdmin) return; // ⚠️ ne rien faire si le bot n'est pas admin
-
-      const body = m.body || "";
-      if (!body) return;
-
-      const linkPatterns = [
-        /https?:\/\/[^\s]+/gi, /www\.[^\s]+\.[a-z]{2,}/gi,
-        /wa\.me\/[0-9]+/gi, /t\.me\/[^\s]+/gi, /chat\.whatsapp\.com\/[^\s]+/gi,
-        /instagram\.com\/[^\s]+/gi, /facebook\.com\/[^\s]+/gi,
-        /youtube\.com\/[^\s]+/gi, /youtu\.be\/[^\s]+/gi,
-        /twitter\.com\/[^\s]+/gi, /x\.com\/[^\s]+/gi, /tiktok\.com\/[^\s]+/gi,
-        /snapchat\.com\/[^\s]+/gi, /discord\.gg\/[^\s]+/gi, /discord\.com\/[^\s]+/gi
-      ];
-
-      const hasLink = linkPatterns.some(p => p.test(body));
-      if (!hasLink) return;
-
       const sender = m.sender;
-      const participant = metadata.participants.find(p => p.id === sender);
-      const isAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';
-      if (isAdmin) return; // Les admins ne sont jamais avertis
+      const mode = global.antiLinkGroups[chatId].mode;
 
-      // Supprimer le message si possible
-      try { await kaya.sendMessage(chatId, { delete: m.key }); } catch {}
+      // ⚠️ Ignorer si admin/owner
+      if (m.isAdmin || m.isOwner) return;
 
-      const mode = global.antiLinkGroups[chatId].mode || "warn";
+      const linkRegex = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/i;
+      if (!linkRegex.test(m.body)) return;
 
-      if (mode === "delete") return;
+      // Supprimer le message
+      await kaya.sendMessage(chatId, { delete: m.key }).catch(() => {});
 
-      if (mode === "kick") {
-        try {
-          await kaya.groupParticipantsUpdate(chatId, [sender], "remove");
-          await kaya.sendMessage(chatId, { text: `👢 @${sender.split("@")[0]} a été expulsé pour avoir envoyé un lien.\n🚫 Les liens ne sont pas autorisés dans ce groupe.`, mentions: [sender] });
-        } catch {
-          await kaya.sendMessage(chatId, { text: `⚠️ @${sender.split("@")[0]} a envoyé un lien interdit mais je ne peux pas l'expulser (permissions insuffisantes).`, mentions: [sender] });
-        }
-        return;
+      // 🚫 MODE DELETE → Message simple
+      if (mode === "delete") {
+        return kaya.sendMessage(chatId, {
+          text: `🚫 LIENS INTERDITS\n👤 @${sender.split("@")[0]}\n🔗 Les liens sont interdits dans ce groupe.`,
+          mentions: [sender]
+        });
       }
 
+      // 🚨 MODE KICK → Expulsion directe
+      if (mode === "kick") {
+        await kaya.sendMessage(chatId, {
+          text: `🚫 @${sender.split("@")[0]} a été expulsé pour envoi de lien.`,
+          mentions: [sender]
+        });
+        return await kaya.groupParticipantsUpdate(chatId, [sender], "remove");
+      }
+
+      // ⚠️ MODE WARN
       if (mode === "warn") {
         if (!global.userWarns[chatId]) global.userWarns[chatId] = {};
-        if (!global.userWarns[chatId][sender]) global.userWarns[chatId][sender] = 0;
+        global.userWarns[chatId][sender] = (global.userWarns[chatId][sender] || 0) + 1;
 
-        global.userWarns[chatId][sender]++;
-        const warnCount = global.userWarns[chatId][sender];
+        const warns = global.userWarns[chatId][sender];
 
-        if (warnCount >= 4) {
+        // ⚠️ Avertissement
+        await kaya.sendMessage(chatId, {
+          text: `⚠️ ANTI-LINK AVERTISSEMENT\n👤 @${sender.split("@")[0]}\n🔗 Les liens sont interdits.\n📊 Avertissement : ${warns}/4\n🚫 Au 4ᵉ avertissement → EXPULSION`,
+          mentions: [sender]
+        });
+
+        if (warns >= 4) {
           delete global.userWarns[chatId][sender];
-          try {
-            await kaya.groupParticipantsUpdate(chatId, [sender], "remove");
-            await kaya.sendMessage(chatId, { text: `🚫 @${sender.split("@")[0]} a été expulsé après 4 avertissements pour liens interdits.`, mentions: [sender] });
-          } catch {
-            await kaya.sendMessage(chatId, { text: `⚠️ @${sender.split("@")[0]} a atteint 4 avertissements mais je ne peux pas l'expulser (permissions insuffisantes).`, mentions: [sender] });
-          }
-          return;
-        }
 
-        await kaya.sendMessage(chatId, { text: `⚠️ @${sender.split("@")[0]}, les liens sont interdits dans ce groupe !\nAvertissement ${warnCount}/4\n(4 avertissements = expulsion)`, mentions: [sender] });
+          await kaya.sendMessage(chatId, {
+            text: `🚫 @${sender.split("@")[0]} a été expulsé après 4 avertissements.`,
+            mentions: [sender]
+          });
+
+          await kaya.groupParticipantsUpdate(chatId, [sender], "remove");
+        }
       }
 
-    } catch (err) {
-      console.error("❌ Erreur détection antilink:", err);
+    } catch (e) {
+      console.error("❌ AntiLink detect error:", e);
     }
   }
 };

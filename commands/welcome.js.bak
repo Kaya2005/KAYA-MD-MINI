@@ -40,9 +40,6 @@ export default {
 
   async execute(sock, m, args) {
     try {
-      // 🔐 Sécurité : uniquement le bot/owner
-      if (!m.fromMe) return;
-
       const permissions = await checkAdminOrOwner(sock, m.chat, m.sender);
       if (!permissions.isOwner) {
         return sock.sendMessage(
@@ -134,20 +131,13 @@ export default {
       const creationDate = metadata.creation ? new Date(metadata.creation * 1000).toLocaleDateString('fr-FR') : 'Inconnue';
 
       for (const user of update.participants) {
+        // Normalisation JID
         const userJid = typeof user === 'string' ? user : user?.id || user?.jid;
         if (!userJid) continue;
 
         const username = '@' + userJid.split('@')[0];
         const groupName = metadata.subject || 'Nom inconnu';
         const groupSize = metadata.participants.length;
-
-        // 🔹 Récupérer la photo de profil
-        let ppUrl;
-        try {
-          ppUrl = await sock.profilePictureUrl(userJid, 'image');
-        } catch {
-          ppUrl = 'https://i.ibb.co/7CQVJNm/default-profile.png'; // image par défaut si pas de photo
-        }
 
         const welcomeText = `╭━━〔 WELCOME  〕━━⬣
 ├ 👤 Bienvenue ${username}
@@ -162,12 +152,12 @@ export default {
 ╰─────────────────────⬣`;
 
         await sock.sendMessage(chatId, {
-          image: { url: ppUrl },
-          caption: welcomeText,
+          text: welcomeText,
           mentions: [userJid],
           contextInfo: { ...contextInfo, mentionedJid: [userJid] }
         });
 
+        // Petit délai pour éviter double envoi
         await new Promise(r => setTimeout(r, 500));
       }
 

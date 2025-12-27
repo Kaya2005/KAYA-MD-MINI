@@ -6,8 +6,11 @@ import { contextInfo } from '../system/contextInfo.js';
 const antiPromoteFile = path.join(process.cwd(), 'system/antipromote.json');
 let antiPromoteData = {};
 if (fs.existsSync(antiPromoteFile)) {
-  try { antiPromoteData = JSON.parse(fs.readFileSync(antiPromoteFile, 'utf-8')); } 
-  catch { antiPromoteData = {}; }
+  try { 
+    antiPromoteData = JSON.parse(fs.readFileSync(antiPromoteFile, 'utf-8')); 
+  } catch { 
+    antiPromoteData = {}; 
+  }
 }
 
 function saveAntiPromote() {
@@ -27,8 +30,9 @@ export default {
   run: async (kaya, m, args) => {
     if (!m.isGroup) return kaya.sendMessage(m.chat, { text: '❌ Cette commande fonctionne uniquement dans un groupe.', contextInfo }, { quoted: m });
 
+    // ✅ Vérification admin/owner via checkAdminOrOwner
     const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
-    if (!permissions.isAdmin && !permissions.isOwner) return kaya.sendMessage(m.chat, { text: '🚫 Seuls les Admins ou le Propriétaire peuvent activer/désactiver l\'anti-promote.', contextInfo }, { quoted: m });
+    if (!permissions.isAdminOrOwner) return kaya.sendMessage(m.chat, { text: '🚫 Seuls les Admins ou le Propriétaire peuvent activer/désactiver l\'anti-promote.', contextInfo }, { quoted: m });
 
     const chatId = m.chat;
     const action = args[0]?.toLowerCase();

@@ -1,4 +1,3 @@
-// ================= commands/delete.js =================
 import checkAdminOrOwner from '../system/checkAdmin.js';
 import { contextInfo } from '../system/contextInfo.js';
 
@@ -35,7 +34,7 @@ export default {
       }
 
       let targetKey = quoted?.key;
-      let targetUser = quoted?.key.participant || quoted?.key.remoteJid || mentioned;
+      let targetUser = quoted?.participant || mentioned;
 
       // ✅ Vérifie les permissions dans un groupe
       if (m.isGroup) {

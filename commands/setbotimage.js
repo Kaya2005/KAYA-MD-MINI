@@ -41,7 +41,7 @@ export default {
 
       await Kaya.sendMessage(
         m.chat,
-        { text: '✅ Image du bot mise à jour avec succès !' },
+        { text: ' Image du bot mise à jour avec succès !' },
         { quoted: m }
       );
 

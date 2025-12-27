@@ -28,6 +28,9 @@ export default {
 
   run: async (kaya, m, args) => {
     try {
+      // 🔐 Sécurité : uniquement le bot/owner
+      if (!m.fromMe) return;
+
       if (!m.isGroup) {
         return kaya.sendMessage(
           m.chat,
@@ -125,6 +128,7 @@ export default {
           const userJid = typeof user === "string" ? user : decodeJid(user.id || user);
           const username = "@" + userJid.split("@")[0];
 
+          // 🔹 Photo du membre qui part, sinon photo du groupe
           const userPP = await kaya.profilePictureUrl(userJid, "image").catch(() => null);
           const groupPP = await kaya.profilePictureUrl(chatId, "image").catch(() => "https://i.imgur.com/3XjWdoI.png");
 

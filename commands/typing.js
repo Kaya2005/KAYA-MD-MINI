@@ -1,5 +1,5 @@
 // ==================== commands/typing.js ====================
-import { saveBotModes } from '../system/botModes.js';
+import { saveBotModes } from '../system/botStatus.js';
 import { contextInfo } from '../system/contextInfo.js';
 
 export default {
@@ -9,7 +9,7 @@ export default {
 
   run: async (kaya, m, args) => {
     try {
-      // 🔐 Owner uniquement (sécurisé)
+      // 🔐 Owner uniquement
       if (!m.fromMe) return;
 
       const action = args[0]?.toLowerCase();
@@ -21,7 +21,9 @@ export default {
         );
       }
 
+      // Initialiser botModes si nécessaire
       global.botModes = global.botModes || {};
+      global.botModes.typing = global.botModes.typing || false;
 
       if (action === 'on') {
         global.botModes.typing = true;
@@ -56,7 +58,7 @@ export default {
       }
 
       if (action === 'status') {
-        const isActive = global.botModes.typing || false;
+        const isActive = global.botModes.typing;
         return kaya.sendMessage(
           m.chat,
           { text: `📊 Mode typing: ${isActive ? '✅ ACTIVÉ' : '❌ DÉSACTIVÉ'}`, contextInfo },

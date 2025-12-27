@@ -26,7 +26,7 @@ export default {
 
     // ===================== TEXTE DU MENU =====================
     const menuText = `
-         ${BOT_NAME}
+        ${BOT_NAME}
 ┏━━━━━━━━━━━━━━━━━━━
 ┃ 🕒 *Heure* : ${time}
 ┃ 🧾 *Cmds*  : ${totalCmds}

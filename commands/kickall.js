@@ -1,3 +1,4 @@
+// ==================== commands/purge.js ====================
 import checkAdminOrOwner from "../system/checkAdmin.js";
 
 export default {
@@ -8,17 +9,22 @@ export default {
   admin: true,
   botAdmin: true,
 
-  run: async (kaya, m, msg, store, args) => {
+  run: async (kaya, m, args) => {
     try {
       if (!m.isGroup) return;
 
-      // ✅ Vérifie si la personne qui lance est admin/owner
+      // ✅ Vérification admin / owner
       const permissions = await checkAdminOrOwner(kaya, m.chat, m.sender);
-      if (!permissions.isAdminOrOwner) return;
+      if (!permissions.isAdminOrOwner) {
+        return kaya.sendMessage(
+          m.chat,
+          { text: "🚫 Seuls les Admins ou le Propriétaire peuvent utiliser `.purge`." }
+        );
+      }
 
       // ✅ Récupère metadata du groupe
       const groupMetadata = await kaya.groupMetadata(m.chat);
-      const botNumber = await kaya.decodeJid(kaya.user.id);
+      const botNumber = kaya.user.id.split(":")[0] + "@s.whatsapp.net";
 
       // ✅ Liste des membres à expulser (non admins et non bot)
       const toKick = groupMetadata.participants
@@ -37,7 +43,7 @@ export default {
       return;
 
     } catch (err) {
-      console.error("❌ Erreur kickall :", err);
+      console.error("❌ Erreur purge :", err);
       return;
     }
   }
