@@ -1,18 +1,18 @@
 // ==================== system/updateChecker.js ====================
-import axios from 'axios';
-import config from '../config.js';
+import axios from "axios";
+import config from "../config.js";
 
 export async function checkUpdate(sock) {
   try {
     const { data } = await axios.get(
-      'https://raw.githubusercontent.com/Kaya2005/KAYA-MD-MINI/main/version.json'
+      "https://raw.githubusercontent.com/Kaya2005/KAYA-MD-MINI/main/version.json"
     );
 
-    const localVersion = config.VERSION || '0.0.0';
+    const localVersion = config.VERSION || "0.0.0";
     const remoteVersion = data.version;
 
     if (localVersion !== remoteVersion) {
-      const text = `
+      const msg = `
 🚀 *MISE À JOUR DISPONIBLE*
 ━━━━━━━━━━━━━━━━━━
 📦 Version actuelle : ${localVersion}
@@ -23,11 +23,12 @@ export async function checkUpdate(sock) {
 👉 Tape *.update* pour mettre à jour
 `;
 
-      for (const ownerJid of global.owner) {
-        await sock.sendMessage(ownerJid, { text });
-      }
+      await sock.sendMessage(
+        sock.user.id,
+        { text: msg }
+      );
     }
   } catch (err) {
-    console.log('⚠️ Impossible de vérifier les mises à jour', err);
+    console.log("⚠️ Vérification update impossible");
   }
 }
